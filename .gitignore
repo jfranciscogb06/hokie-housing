@@ -1,0 +1,11 @@
+# downloaded photos (~800MB) — the site falls back to CDN URLs without them; run scraper/run.sh to fetch
+photos/
+# scraper caches
+data/raw/
+data/changes/
+data/scrape.log
+data/*.out
+scraper/.venv/
+scraper/.chrome-profile*/
+scraper/__pycache__/
+.DS_Store
