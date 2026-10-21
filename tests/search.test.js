@@ -57,7 +57,11 @@ test("description restrictions override broad tags; unknown eligibility stays un
     assert.equal(p.filter({ eligibility: Eligibility.of({}) }), false);
     const matches = listings.filter(p.filter);
     assert(matches.length > 0); assert(matches.every(l => l.eligibility.undergrad === true));
-    assert(listings.filter(l => l.eligibility.conflict).length >= 159);
+    // Every catalog listing whose description restricts undergrads is marked ineligible,
+    // whether the scraper or the runtime applied the rule.
+    const restricted = listings.filter(l => new RegExp(Eligibility.patterns.denied, "i").test((l.desc || "").replace(/\s+/g, " ")) || new RegExp(Eligibility.patterns.gradOnly, "i").test((l.desc || "").replace(/\s+/g, " ")));
+    assert(restricted.length > 0);
+    assert(restricted.every(l => l.eligibility.undergrad === false && l.eligibility.evidence));
 });
 test("only validated model data becomes a predicate", () => {
     assert.throws(() => Search.compile({ ...Search.empty(), maxDrive: -1 }));
