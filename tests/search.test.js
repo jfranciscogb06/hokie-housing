@@ -124,3 +124,16 @@ test("'walk to campus' phrasing is a commute filter, never leftover name text", 
     const p = Search.local("4 bed under 1200 per bed walk to campus");
     assert(listings.filter(l => p.filter(l) && Search.matchesText(l, p.text)).length > 0);
 });
+test("assistant answers questions about a named place instead of searching", () => {
+    const html = fs.readFileSync(require.resolve("../index.html"), "utf8");
+    const source = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(x => x[1]).join("\n");
+    const React = { createElement: (type, props, ...children) => ({ type, props, children }), useState: v => [v, () => {}], useEffect() {}, useMemo: f => f(), useRef: () => ({ current: null }) };
+    const ctx = vm.createContext({ HousingSearch: Search, HousingEligibility: Eligibility, HousingCatalog: Catalog, React, ReactDOM: { createRoot: () => ({ render() {} }) }, window: {}, document: { getElementById() {} }, console });
+    vm.runInContext(fs.readFileSync(require.resolve("../data/listings.js"), "utf8"), ctx);
+    vm.runInContext(source, ctx);
+    const r = vm.runInContext("answerAI('is hub pet friendly?')", ctx);
+    assert.match(r.text, /^Hub Blacksburg: /);
+    assert.equal(r.picks.length, 1);
+    // Plain searches still search.
+    assert(vm.runInContext("answerAI('pet friendly under 1500').picks.length", ctx) > 0);
+});

@@ -2504,7 +2504,14 @@ function answerAI(q, openListing, interpretation = null) {
     }
     // Direct lookup on a named property — "tell me about Park37", "reviews for Hub Blacksburg", "rating of Foxridge".
     const parsed = interpretation || parseQuery(q);
-    const nameHit = !parsed.facets.length && AI_NAME_KEYS.find(({ key }) => new RegExp(`\\b${key}\\b`).test(sClean));
+    // A question about a named place ("is hub pet friendly?", "does the edge have a gym") is
+    // answered from that listing, not run as a search for places matching the name AND the feature.
+    const namedPlace = AI_NAME_KEYS.find(({ key }) => new RegExp(`\\b${key}\\b`).test(sClean));
+    if (namedPlace && parsed.facets.length && (/\?\s*$/.test(q.trim()) || /^(is|are|does|do|can|how|what|when|who|which|will)\b/.test(s.trim()))) {
+        const a = answerAbout(namedPlace.l, q);
+        if (a) return { text: `${namedPlace.l.name}: ${a}`, picks: [namedPlace.l] };
+    }
+    const nameHit = !parsed.facets.length && namedPlace;
     if (nameHit) {
         const l = nameHit.l;
         const rv = l.reviewsList || REVIEWS[l.id] || [];

@@ -1,5 +1,5 @@
 // Local app + same-origin AI endpoint. Node 22+, no installed dependencies.
-const http = require("node:http"), fs = require("node:fs"), path = require("node:path");
+const http = require("node:http"), fs = require("node:fs"), path = require("node:path"), zlib = require("node:zlib");
 const search = require("./api/search.js");
 const message = require("./api/message.js");
 const root = __dirname;
@@ -9,6 +9,7 @@ const sponsors = require("./sponsorships.js").createHandler({ statsPath: path.jo
 // Local photo path -> original CDN URL. Hosts don't carry the 800MB photos/ folder,
 // so a missing local photo redirects straight to its CDN copy (no failed request).
 let photoMap = new Map(), photoMapMtime = 0;
+const gzCache = new Map();
 function cdnFor(name) {
     try {
         const file = path.join(root, "data/listings.json"), mtime = fs.statSync(file).mtimeMs;
@@ -38,8 +39,17 @@ http.createServer(async (req, res) => {
     try {
         const stat = await fs.promises.stat(file);
         if (!stat.isFile()) throw new Error("not a file");
-        res.writeHead(200, { "Content-Type": types[path.extname(file)] || "application/octet-stream", "Content-Length": stat.size,
-            "Cache-Control": name.startsWith("/photos/") || name.startsWith("/assets/") ? "public, max-age=604800" : "no-cache" });
+        const type = types[path.extname(file)] || "application/octet-stream";
+        const cache = name.startsWith("/photos/") || name.startsWith("/assets/") ? "public, max-age=604800" : "no-cache";
+        // Text files (the 1.9MB catalog especially) go out gzipped: ~5x smaller on phones.
+        if (/text|javascript|json/.test(type) && /\bgzip\b/.test(req.headers["accept-encoding"] || "")) {
+            const key = file + ":" + stat.mtimeMs;
+            let body = gzCache.get(key);
+            if (!body) { body = zlib.gzipSync(await fs.promises.readFile(file), { level: 6 }); gzCache.set(key, body); }
+            res.writeHead(200, { "Content-Type": type, "Content-Encoding": "gzip", "Content-Length": body.length, "Cache-Control": cache, Vary: "Accept-Encoding" });
+            return res.end(body);
+        }
+        res.writeHead(200, { "Content-Type": type, "Content-Length": stat.size, "Cache-Control": cache });
         fs.createReadStream(file).pipe(res);
     } catch {
         const cdn = name.startsWith("/photos/") && cdnFor(name);
