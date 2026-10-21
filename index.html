@@ -41,6 +41,11 @@ const T = {
 const CONTACT = {
     inbox: "",   // <- your inquiry inbox, e.g. "hokiehousing@vt.edu" (used when a listing has no email)
 };
+/* Homepage sponsorship requests from property managers (see "Homepage sponsorships" in
+   README.md). Requests open a Gmail draft to CONTACT.inbox; payment and activation are
+   arranged directly, then `npm run sponsors -- activate`. Leave prices blank to say
+   "pricing on request" rather than publish a number you haven't decided. */
+const SPONSOR_OFFER = { slots: 2, terms: [30, 60, 90], pricePer30Days: null };
 const gmailCompose = (to, subject, body) => `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to || "")}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 const mailtoLink = (to, subject, body) => `mailto:${encodeURIComponent(to || "")}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 /* ---------------------------- ACCOUNTS + "I'M INTERESTED" ----------------------------
@@ -1334,6 +1339,62 @@ function MobileMenu({ user, role, tabs, onTab, onRole, onLogout, onAssistant, on
             React.createElement("div", { style: { overflowWrap: "anywhere", color: T.sub } }, user.email),
             React.createElement("label", { style: { display: "grid", gap: 8, marginTop: 16 } }, "Account view", React.createElement("select", { "aria-label": "Account view", value: role, onChange: e => onRole(e.target.value), style: { minHeight: 52, padding: "12px 14px", font: "inherit", border: `1px solid ${T.line}`, borderRadius: 12, background: "white" } }, React.createElement("option", { value: user.role || "Student" }, user.role || "Student"), React.createElement("option", { value: "Admin" }, "Admin (demo)"))),
             React.createElement("button", { className: "hk-btn", onClick: onLogout, style: { ...S.ghost, marginTop: 20, minHeight: 52, width: "100%", fontSize: 18 } }, "Log out")));
+}
+function Advertise({ listings, onBack }) {
+    const [live, setLive] = useState(null);
+    useEffect(() => {
+        fetch("/api/sponsors").then((r) => r.ok ? r.json() : { campaigns: [] }).then((d) => setLive((d.campaigns || []).filter((c) => !c.preview).length)).catch(() => setLive(null));
+    }, []);
+    const open = live === null ? null : Math.max(0, SPONSOR_OFFER.slots - live);
+    const [q, setQ] = useState("");
+    const [pick, setPick] = useState(null);
+    const [form, setForm] = useState({ name: "", company: "", phone: "", days: SPONSOR_OFFER.terms[0], start: "", note: "" });
+    const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+    const matches = q.trim().length >= 2 ? listings.filter((l) => !l.parentId && HousingSearch.matchesText(l, q.trim())).slice(0, 6) : [];
+    const price = SPONSOR_OFFER.pricePer30Days ? `$${SPONSOR_OFFER.pricePer30Days.toLocaleString()} per 30 days` : "Pricing on request";
+    const valid = pick && form.name.trim().length > 1 && form.company.trim().length > 1;
+    const send = (e) => {
+        e.preventDefault();
+        if (!valid) return;
+        const subject = `Sponsored placement request: ${pick.name}`;
+        const body = [`Property: ${pick.name}${pick.address ? `, ${pick.address}` : ""}`, `Listing ID: ${pick.id}`, `Term: ${form.days} days${form.start ? `, starting ${form.start}` : ""}`,
+            "", `Name: ${form.name.trim()}`, `Company: ${form.company.trim()}`, form.phone ? `Phone: ${form.phone}` : null, form.note ? `\n${form.note.trim()}` : null].filter((x) => x !== null).join("\n");
+        window.open(gmailCompose(CONTACT.inbox, subject, body), "_blank", "noopener");
+    };
+    const inp = { padding: "11px 13px", borderRadius: 10, border: `1.5px solid ${T.line}`, fontSize: 16, fontFamily: "inherit", color: T.ink, width: "100%", boxSizing: "border-box" };
+    const label = (t, el) => React.createElement("label", { style: { display: "grid", gap: 6, fontSize: 15, fontWeight: 700, color: T.sub } }, t, el);
+    return (React.createElement("div", { style: { maxWidth: 760, margin: "0 auto", padding: "8px 0 40px" } },
+        React.createElement("button", { className: "hk-btn", onClick: onBack, style: { ...S.ghost, padding: "8px 14px", fontSize: 15, marginBottom: 16 } }, "Back"),
+        React.createElement("h1", { style: { ...S.h2, fontSize: 30 } }, "Advertise your property"),
+        React.createElement("p", { style: { fontSize: 17, lineHeight: 1.6, color: T.sub, marginTop: 8 } }, "Put your community in front of Virginia Tech students on the Hokie Housing homepage."),
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginTop: 20 } },
+            [["Homepage placement", `${SPONSOR_OFFER.slots} slots, shown to every visitor and labeled Sponsored.`],
+                ["Fair to students", "Sponsorship never changes search results or the near-campus picks."],
+                ["Reporting", "Placement views and profile clicks for your term."],
+                [price, `Terms of ${SPONSOR_OFFER.terms.join(", ")} days. No auto-renewal.`]].map(([h, t]) => React.createElement("div", { key: h, style: { ...S.card, padding: 16 } },
+                React.createElement("div", { style: { fontWeight: 800, fontSize: 17, color: T.ink } }, h),
+                React.createElement("div", { style: { fontSize: 15, color: T.sub, marginTop: 4, lineHeight: 1.5 } }, t)))),
+        React.createElement("div", { style: { ...S.card, padding: 16, marginTop: 16, fontSize: 16, color: T.ink } },
+            open === null ? "Slot availability is shown on the live site." : open > 0 ? `${open} of ${SPONSOR_OFFER.slots} homepage slots open now.` : "Both slots are booked right now \u2014 send a request to get the next opening."),
+        React.createElement("form", { onSubmit: send, style: { ...S.card, padding: 20, marginTop: 16, display: "grid", gap: 14 } },
+            React.createElement("div", { style: { fontWeight: 900, fontSize: 20, color: T.ink } }, "Request a placement"),
+            pick ? React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 12px", background: T.stone, borderRadius: 10 } },
+                React.createElement("div", null, React.createElement("div", { style: { fontWeight: 800 } }, pick.name), React.createElement("div", { style: { fontSize: 15, color: T.sub } }, pick.address)),
+                React.createElement("button", { type: "button", className: "hk-btn", onClick: () => setPick(null), style: { ...S.ghost, padding: "6px 12px", fontSize: 15 } }, "Change"))
+                : label("Your property", React.createElement("div", null,
+                    React.createElement("input", { value: q, onChange: (e) => setQ(e.target.value), placeholder: "Search by property name or address", style: inp }),
+                    matches.length > 0 && React.createElement("div", { style: { display: "grid", gap: 4, marginTop: 6 } }, matches.map((l) => React.createElement("button", { key: l.id, type: "button", className: "hk-btn", onClick: () => { setPick(l); setQ(""); }, style: { textAlign: "left", padding: "9px 12px", borderRadius: 10, background: T.card, border: `1px solid ${T.line}`, fontFamily: "inherit", fontSize: 15 } }, React.createElement("b", null, l.name), l.address ? ` \u00B7 ${l.address}` : ""))),
+                    q.trim().length >= 2 && matches.length === 0 && React.createElement("div", { style: { fontSize: 15, color: T.faint, marginTop: 6 } }, "Not listed yet? Mention the property in the note below."))),
+            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 } },
+                label("Your name", React.createElement("input", { value: form.name, onChange: set("name"), autoComplete: "name", style: inp })),
+                label("Company", React.createElement("input", { value: form.company, onChange: set("company"), autoComplete: "organization", style: inp }))),
+            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 } },
+                label("Phone (optional)", React.createElement("input", { value: form.phone, onChange: set("phone"), type: "tel", autoComplete: "tel", style: inp })),
+                label("Term", React.createElement("select", { value: form.days, onChange: set("days"), style: inp }, SPONSOR_OFFER.terms.map((d) => React.createElement("option", { key: d, value: d }, d, " days")))),
+                label("Preferred start", React.createElement("input", { type: "date", value: form.start, onChange: set("start"), style: inp }))),
+            label("Note (optional)", React.createElement("textarea", { value: form.note, onChange: set("note"), rows: 3, style: { ...inp, resize: "vertical" } })),
+            React.createElement("button", { type: "submit", className: "hk-btn", disabled: !valid, style: { ...S.primary, opacity: valid ? 1 : 0.55 } }, "Open request in Gmail"),
+            React.createElement("p", { style: { fontSize: 14, color: T.faint, margin: 0, lineHeight: 1.5 } }, "We\u2019ll confirm pricing, dates and your cover photo by email before anything goes live. Nothing is charged here."))));
 }
 function Landing({ onExplore }) {
     const ref = useRef(null);
@@ -2867,13 +2928,16 @@ function HokieHousing() {
             tab === "roommates" && React.createElement(Roommates, { startMessage: startMessage, isPro: !!user.pro, onOpenPro: () => setProModalOpen(true) }),
             tab === "saved" && React.createElement(Saved, { saved: saved, toggleSave: toggleSave, compare: compare, toggleCompare: toggleCompare, openListing: setDetail, listings: allListings }),
             tab === "messages" && React.createElement(ContactHistory, { sent: sent, onOpenListing: (id) => { const l = allListings.find((x) => x.id === id); if (l) openListing(l); else notify("That listing isn\u2019t in the catalog anymore"); }, onRemove: (id) => setSent((xs) => xs.filter((m) => m.id !== id)) }),
-            tab === "admin" && role === "Admin" && React.createElement(Admin, null)),
+            tab === "admin" && role === "Admin" && React.createElement(Admin, null),
+            tab === "advertise" && React.createElement(Advertise, { listings: allListings, onBack: () => { setTab("home"); window.scrollTo(0, 0); } })),
         React.createElement("footer", { style: { display: !detail && tab === "explore" && role !== "Landlord" ? "none" : undefined, borderTop: `1px solid ${T.line}`, marginTop: 8 } },
             React.createElement("div", { style: { maxWidth: 1400, margin: "0 auto", padding: "22px 18px 34px", display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 14 } },
                 React.createElement("div", { style: { fontSize: 16, color: T.faint, lineHeight: 1.7, maxWidth: 640 } },
                     React.createElement("b", { style: { color: T.sub } }, "Hokie Housing"),
                     " is an independent student project, not affiliated with Virginia Tech. Confirm price and availability with the property."),
-                React.createElement("div", { style: { fontSize: 16, color: T.faint } }, "Blacksburg, VA"))),
+                React.createElement("div", { style: { fontSize: 16, color: T.faint, display: "flex", gap: 16, alignItems: "center" } },
+                    React.createElement("button", { className: "hk-btn", onClick: () => { setTab("advertise"); setDetail(null); window.scrollTo(0, 0); }, style: { background: "transparent", color: T.sub, fontWeight: 700, fontSize: 16, padding: 0, textDecoration: "underline" } }, "For property managers"),
+                    "Blacksburg, VA"))),
         inquiry && React.createElement(InquiryModal, { l: inquiry.l, kind: inquiry.kind, unit: inquiry.unit, user: user, onContact: recordContact, onClose: () => setInquiry(null), onSent: (body, note, extra) => recordInquiry(inquiry.l, inquiry.kind, body, note, extra) }),
         role !== "Landlord" && React.createElement(AIAssistant, { open: aiOpen, setOpen: setAiOpen, openListing: openListing, goToSublease: goToSublease, prefill: aiPrefill, onPrefillUsed: () => setAiPrefill("") }),
 
