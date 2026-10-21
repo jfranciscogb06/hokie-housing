@@ -11,6 +11,7 @@
 <!-- Live catalog written by scraper/scrape.py. If it's missing the app falls back to the built-in demo listings. -->
 <script src="data/listings.js"></script>
 <script src="eligibility.js"></script>
+<script src="catalog.js"></script>
 <script src="housing-search.js"></script>
 <style>html,body,#root{margin:0;padding:0;height:100%;}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:16px;}</style>
 </head>
@@ -212,7 +213,7 @@ const DEMO_LISTINGS = [
 ];
 // The 3 listings this demo's "Landlord" role persona manages — lets the Landlord home
 // stats below be real data instead of another hardcoded number.
-const LISTINGS = (LIVE ? window.HOKIE_LISTINGS : DEMO_LISTINGS).map(l => {
+const LISTINGS = HousingCatalog.normalize(LIVE ? window.HOKIE_LISTINGS : DEMO_LISTINGS).map(l => {
     const eligibility = HousingEligibility.of(l);
     return { ...l, eligibility, audience: { ...l.audience, undergrad: eligibility.undergrad },
         cons: eligibility.undergrad === false ? [...new Set([...(l.cons || []), "Undergrads not allowed"])] : l.cons };
@@ -778,6 +779,7 @@ function ListingCard({ l, saved, onSave, compared, onCompare, onOpen, bedsWanted
                 l.utilities && React.createElement("span", { className: "hk-listing-extra" }, React.createElement(Badge, { tone: "blue" }, "Utilities incl.")),
                 l.pets && React.createElement("span", { className: "hk-listing-extra" }, React.createElement(Badge, { tone: "gold" }, "Pets OK")),
                 interestedCount > 0 && React.createElement(Badge, { tone: "maroon" }, interestedCount, " interested"),
+                l.groupedCount > 0 && React.createElement(Badge, { tone: "gold" }, "+", l.groupedCount, " sublet", l.groupedCount === 1 ? "" : "s", " here"),
                 React.createElement("button", { className: "hk-btn hk-listing-compare", onClick: (e) => { e.stopPropagation(); onCompare(l.id); }, style: { marginLeft: "auto", fontSize: 16, fontWeight: 700, padding: "4px 10px", borderRadius: 99, background: compared ? T.maroon : "transparent", color: compared ? "#fff" : T.faint, border: `1px solid ${compared ? T.maroon : T.line}` } }, compared ? "\u2713 Comparing" : "+ Compare")))));
 }
 /* Prefilled Gmail compose for property inquiries. Records draft opening, not
@@ -898,8 +900,10 @@ function InterestCard({ p, me, onMessage }) {
             p.note && React.createElement("div", { style: { fontSize: 16, color: T.ink, marginTop: 3, fontStyle: "italic" } }, "\u201C", p.note, "\u201D")),
         !me && onMessage && React.createElement("button", { className: "hk-btn", onClick: onMessage, style: { ...S.ghost, padding: "7px 12px", fontSize: 16, flexShrink: 0 } }, "Email")));
 }
-function ListingDetail({ l, onClose, onInquiry, saved, onSave, userName, bedsWanted, interested, onJoinInterest, onLeaveInterest, onMessagePerson, user, onAskBot, onContact }) {
+function ListingDetail({ l, onClose, onInquiry, saved, onSave, userName, bedsWanted, interested, onJoinInterest, onLeaveInterest, onMessagePerson, user, onAskBot, onContact, onOpenListing }) {
     const baseReviews = l.reviewsList || REVIEWS[l.id] || [];
+    const parent = l.parentId ? LISTINGS.find((x) => x.id === l.parentId) || null : null;
+    const children = (l.childIds || []).map((id) => LISTINGS.find((x) => x.id === id)).filter(Boolean);
     const plans = l.plans || [];
     const bedCounts = [...new Set(plans.map((p) => p.beds))].sort((a, b) => a - b);
     const [bedsSel, setBedsSel] = useState(bedsWanted && bedCounts.includes(bedsWanted) ? bedsWanted : null);
@@ -974,7 +978,11 @@ function ListingDetail({ l, onClose, onInquiry, saved, onSave, userName, bedsWan
         React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 12 } },
             React.createElement("button", { className: "hk-btn", onClick: onClose, style: { ...S.ghost, padding: "8px 14px", fontSize: 16, display: "inline-flex", alignItems: "center", gap: 6 } }, React.createElement(Icon, { name: "back", size: 15 }), "Back"),
             React.createElement("button", { className: "hk-btn", onClick: () => onSave(l.id), style: { ...S.ghost, padding: "8px 14px", fontSize: 16, display: "inline-flex", alignItems: "center", gap: 6, color: saved ? T.maroon : T.ink } }, React.createElement(Icon, { name: "heart", size: 15 }), saved ? "Saved" : "Save")),
-        React.createElement("h1", { style: { ...S.h2, fontSize: 26, marginBottom: 16 } }, l.name),
+        React.createElement("h1", { style: { ...S.h2, fontSize: 26, marginBottom: l.genericName || parent ? 4 : 16 } }, l.name),
+        (l.genericName || parent) && React.createElement("div", { style: { fontSize: 16, color: T.sub, marginBottom: 16 } },
+            l.genericName && l.listingName,
+            l.genericName && parent && " \u00B7 ",
+            parent && React.createElement(React.Fragment, null, "Part of ", React.createElement("button", { className: "hk-btn", onClick: () => onOpenListing && onOpenListing(parent), style: { background: "transparent", color: T.maroon, fontWeight: 700, fontSize: 16, padding: 0, textDecoration: "underline" } }, parent.name))),
         React.createElement("div", { style: { position: "relative" } },
             React.createElement(ListingGallery, { l, photos: allPhotos, onOpen: openAt }),
             ph.tag && React.createElement("div", { style: { position: "absolute", top: 12, left: 12, pointerEvents: "none" } }, React.createElement(Badge, { tone: "maroon" }, ph.tag)),
@@ -1040,6 +1048,15 @@ function ListingDetail({ l, onClose, onInquiry, saved, onSave, userName, bedsWan
                     (l.manager || l.phone) && React.createElement("div", { style: { display: "flex", gap: 8, alignItems: "flex-start" } }, React.createElement(Icon, { name: "building", size: 15, style: { marginTop: 3, color: T.faint } }), React.createElement("span", null, l.manager || "Listed by owner", l.phone ? ` \u00B7 ${l.phone}` : "")),
                     l.website && React.createElement("div", { style: { display: "flex", gap: 8, alignItems: "center" } }, React.createElement(Icon, { name: "external", size: 15, style: { color: T.faint } }),
                         React.createElement("a", { href: l.website, target: "_blank", rel: "noopener", onClick: () => onContact(l, "website", l.website, unitSel), style: { color: T.maroon, fontWeight: 700 } }, "Property website")))),
+                children.length > 0 && (React.createElement("div", { style: { marginTop: 22 } },
+                    React.createElement("h3", { style: { fontSize: 17, fontWeight: 800, color: T.ink, margin: 0 } }, "Sublets & rooms here (", children.length, ")"),
+                    React.createElement("p", { style: { fontSize: 16, color: T.sub, margin: "4px 0 10px" } }, "Students passing on a lease or renting a room in this community."),
+                    React.createElement("div", { style: { display: "grid", gap: 8 } }, children.map((c) => React.createElement("button", { key: c.id, type: "button", className: "hk-btn", onClick: () => onOpenListing && onOpenListing(c), style: { ...S.card, display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", textAlign: "left", fontFamily: "inherit", cursor: "pointer" } },
+                        c.photos?.[0] ? React.createElement("img", { src: c.photos[0], alt: "", loading: "lazy", onError: (e) => { const r = remoteFor(c, c.photos[0]); if (r && e.target.src !== r) e.target.src = r; else e.target.style.visibility = "hidden"; }, style: { width: 64, height: 48, objectFit: "cover", borderRadius: 6, flexShrink: 0 } }) : React.createElement("div", { style: { width: 64, height: 48, borderRadius: 6, background: T.stone, flexShrink: 0 } }),
+                        React.createElement("div", { style: { flex: 1, minWidth: 0 } },
+                            React.createElement("div", { style: { fontWeight: 800, fontSize: 16, color: T.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, c.listingName || c.name),
+                            React.createElement("div", { style: { fontSize: 16, color: T.sub, marginTop: 2 } }, [c.sublet ? "Sublease" : "Room in shared unit", bedsLabel(c), c.availability].filter(Boolean).join(" \u00B7 "))),
+                        React.createElement("div", { style: { fontWeight: 800, fontSize: 16, color: T.maroon, whiteSpace: "nowrap" } }, c.price > 0 ? `$${c.price.toLocaleString()}${priceUnit(c)}` : "Ask")))))),
                 plans.length > 0 && (React.createElement("div", { style: { marginTop: 22 } },
                     React.createElement("h3", { style: { fontSize: 17, fontWeight: 800, color: T.ink, margin: 0 } }, "Floor plans"),
                     React.createElement("div", { className: "hk-scroll", style: { display: "flex", gap: 6, overflowX: "auto", marginTop: 10, paddingBottom: 2 } },
@@ -1418,7 +1435,9 @@ function Explore({ saved, toggleSave, compare, toggleCompare, openListing, start
             (f.bus === 0 || (l.busStop && l.busStop.walkMin <= f.bus)) && (f.lease === 0 || l.lease <= f.lease) &&
             (!f.audience || (f.audience === "unknown" ? l.eligibility?.undergrad == null : l.eligibility?.[f.audience] === true)) &&
             parsed.filter(l) && matchesText(l, parsed.text));
-        return HousingSearch.sortListings(filtered, parsed.sort || sort);
+        // Show a community once (with "N sublets here") unless the search is for sublets/rooms.
+        const grouped = HousingCatalog.collapse(filtered, { keepChildren: parsed.spec.sublet === true || parsed.spec.shared === true });
+        return HousingCatalog.photosFirst(HousingSearch.sortListings(grouped, parsed.sort || sort));
     }, [pool, f, effective, sort]);
     const bedsWanted = f.beds || (understood.beds ?? null);
     const [filtersOpen, setFiltersOpen] = useState(false);
@@ -2184,7 +2203,8 @@ function aiKeyword(name) {
     const words = name.toLowerCase().replace(/[^\w\s]/g, "").split(/\s+/).filter((w) => w.length > 2 && !AI_STOPWORDS.has(w) && !/^\d+$/.test(w));
     return words[0] || null;
 }
-const AI_NAME_KEYS = LISTINGS.map((l) => ({ l, key: aiKeyword(l.name) })).filter((x) => x.key);
+// Only named places (not address-titled "3 bed house" listings) count as a name lookup.
+const AI_NAME_KEYS = LISTINGS.filter((l) => !l.genericName && !l.parentId).map((l) => ({ l, key: aiKeyword(l.name) })).filter((x) => x.key);
 const AI_AMENITY_TESTS = [
     { re: /\bgym\b|fitness/, label: "gym/fitness", match: /gym|fitness/i },
     { re: /\bpool\b/, label: "pool", match: /pool/i },
@@ -2776,7 +2796,7 @@ function HokieHousing() {
             React.createElement("button", { className: "hk-btn", style: S.ghost, onClick: () => setMenuOpen(false) }, "Close menu"),
             tabs.map(([key, label]) => React.createElement("button", { key, className: "hk-btn", style: S.ghost, onClick: () => { setTab(key); setDetail(null); setMenuOpen(false); window.scrollTo(0, 0); } }, label)),
             React.createElement("button", { className: "hk-btn", style: S.primary, onClick: () => { setAiOpen(true); setMenuOpen(false); } }, "Housing assistant")),
-        detail && React.createElement(ListingDetail, { l: detail, bedsWanted: detailBeds, onClose: closeListing, onInquiry: (l, kind, unit) => setInquiry({ l, kind, unit }), saved: saved.includes(detail.id), onSave: toggleSave, userName: user.name, user: user, interested: interests[detail.id] || [], onJoinInterest: joinInterest, onLeaveInterest: leaveInterest, onMessagePerson: messagePerson, onContact: recordContact, onAskBot: (q) => { setAiPrefill(q); setAiOpen(true); } }),
+        detail && React.createElement(ListingDetail, { key: detail.id, onOpenListing: (x) => openListing(x), l: detail, bedsWanted: detailBeds, onClose: closeListing, onInquiry: (l, kind, unit) => setInquiry({ l, kind, unit }), saved: saved.includes(detail.id), onSave: toggleSave, userName: user.name, user: user, interested: interests[detail.id] || [], onJoinInterest: joinInterest, onLeaveInterest: leaveInterest, onMessagePerson: messagePerson, onContact: recordContact, onAskBot: (q) => { setAiPrefill(q); setAiOpen(true); } }),
         React.createElement("main", { style: { display: detail ? "none" : undefined, maxWidth: (tab === "home" || (tab === "explore" && role !== "Landlord")) ? "none" : 1400, margin: "0 auto", padding: (tab === "home" || (tab === "explore" && role !== "Landlord")) ? 0 : "22px 18px 90px" } },
             tab === "home" && React.createElement(Home, { listings: allListings, saved, toggleSave, compare, toggleCompare, openListing, onSearch: startSearch }),
             tab === "explore" && role !== "Landlord" && React.createElement(Explore, { key: searchRequest.id, initialQuery: searchRequest.query, interests: {}, saved: saved, toggleSave: toggleSave, compare: compare, toggleCompare: toggleCompare, openListing: openListing, startMessage: startMessage, listings: allListings }),

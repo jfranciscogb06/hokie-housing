@@ -1,5 +1,5 @@
 const { test } = require("node:test"), assert = require("node:assert/strict"), fs = require("node:fs"), vm = require("node:vm");
-const Search = require("../housing-search"), Eligibility = require("../eligibility"), api = require("../api/search");
+const Search = require("../housing-search"), Eligibility = require("../eligibility"), Catalog = require("../catalog"), api = require("../api/search");
 const raw = JSON.parse(fs.readFileSync(require.resolve("../data/listings.json"))).listings;
 const listings = raw.map(l => ({ ...l, eligibility: Eligibility.of(l) }));
 test("natural commute searches use driving data, not an accidental walk filter", () => {
@@ -95,7 +95,7 @@ test("entire app parses and runs with the shared modules", () => {
     const html = fs.readFileSync(require.resolve("../index.html"), "utf8");
     const source = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(x => x[1]).join("\n");
     const React = { createElement: (type, props, ...children) => ({ type, props, children }), useState: v => [v, () => {}], useEffect() {}, useMemo: f => f(), useRef: () => ({ current: null }) };
-    const ctx = vm.createContext({ HousingSearch: Search, HousingEligibility: Eligibility, React, ReactDOM: { createRoot: () => ({ render() {} }) }, window: {}, document: { getElementById() {} }, console });
+    const ctx = vm.createContext({ HousingSearch: Search, HousingEligibility: Eligibility, HousingCatalog: Catalog, React, ReactDOM: { createRoot: () => ({ render() {} }) }, window: {}, document: { getElementById() {} }, console });
     vm.runInContext(fs.readFileSync(require.resolve("../data/listings.js"), "utf8"), ctx);
     vm.runInContext(source, ctx);
     const recipient = "leasing+students@example.com", subject = "Tour: 4x4 & balcony", body = "Hi!\nInterested in the 4-bedroom plan.\nIs rent $900/bed?";
@@ -105,7 +105,7 @@ test("entire app parses and runs with the shared modules", () => {
     assert.equal(compose.searchParams.get("to"), recipient);
     assert.equal(compose.searchParams.get("su"), subject);
     assert.equal(compose.searchParams.get("body"), body);
-    assert.equal(vm.runInContext("LISTINGS.length", ctx), 533);
+    assert.equal(vm.runInContext("LISTINGS.length", ctx), raw.length);
     assert.equal(vm.runInContext("parseQuery('5min drive away from campus').spec.maxDrive", ctx), 5);
     assert(vm.runInContext("answerAI('sublease under $1000').picks.every(l => l.sublet && l.price <= 1000)", ctx));
     assert(!vm.runInContext("answerAI('talk to a human').escalate", ctx));

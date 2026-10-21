@@ -11,7 +11,7 @@ http.createServer(async (req, res) => {
     if (["/api/sponsors", "/api/sponsors/event"].includes(name)) return sponsors(req, res);
     // Serve only public assets, not environment files, source tooling or git.
     if (name === "/") name = "/index.html";
-    if (!(["/index.html", "/housing-search.js", "/eligibility.js"].includes(name) || /^\/(?:data|photos|assets)\/[\w./-]+$/.test(name)) || name.split("/").some(x => x.startsWith("."))) { res.writeHead(404); return res.end(); }
+    if (!(["/index.html", "/housing-search.js", "/eligibility.js", "/catalog.js"].includes(name) || /^\/(?:data|photos|assets)\/[\w./-]+$/.test(name)) || name.split("/").some(x => x.startsWith("."))) { res.writeHead(404); return res.end(); }
     const file = path.resolve(root, "." + name);
     if (!file.startsWith(root + path.sep)) { res.writeHead(404); return res.end(); }
     try {

@@ -103,7 +103,7 @@
     }
     function matchesText(l, text) {
         if (!text) return true;
-        const hay = `${l.name} ${l.area} ${l.type} ${l.address || ""} ${l.manager || ""}`.toLowerCase().replace(/[’']/g, "");
+        const hay = `${l.name} ${l.listingName || ""} ${l.area} ${l.type} ${l.address || ""} ${l.manager || ""}`.toLowerCase().replace(/[’']/g, "");
         return text.toLowerCase().replace(/[’']/g, "").split(/\s+/).filter(Boolean).every(w => hay.includes(w));
     }
     function sortListings(list, sort) {

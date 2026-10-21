@@ -15,7 +15,7 @@ case "$DEST/" in "$SRC/"*)
   exit 1 ;;
 esac
 cp "$SRC/index.html" "$DEST/index.html"
-cp "$SRC/housing-search.js" "$SRC/eligibility.js" "$SRC/sponsorships.js" "$SRC/server.js" "$SRC/package.json" "$SRC/.env.example" "$DEST/"
+cp "$SRC/housing-search.js" "$SRC/eligibility.js" "$SRC/catalog.js" "$SRC/sponsorships.js" "$SRC/server.js" "$SRC/package.json" "$SRC/.env.example" "$DEST/"
 rsync -a "$SRC/api/" "$DEST/api/"
 rsync -a "$SRC/assets/" "$DEST/assets/"
 rsync -a "$SRC/sponsorships/" "$DEST/sponsorships/"
