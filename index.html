@@ -43,18 +43,60 @@ const CONTACT = {
 };
 const gmailCompose = (to, subject, body) => `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to || "")}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 const mailtoLink = (to, subject, body) => `mailto:${encodeURIComponent(to || "")}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-/* ---------------------------- "I'M INTERESTED" (shared) ----------------------------
-   Students mark a listing they're interested in and add a mini profile; everyone else
-   viewing that listing sees who's interested and can message them. Shared across
-   users through a Supabase table (free tier, no server code) — see scraper/README.md
-   for the 5-line table + policy setup. Until it's configured the list is stored in
-   this browser only (fine for testing, but nobody else sees it). */
+/* ---------------------------- ACCOUNTS + "I'M INTERESTED" ----------------------------
+   Students sign in with their VT Google account (Supabase Auth) and can mark a listing
+   they're interested in so others looking at it can find roommates. Setup and the
+   database rules are in backend/README.md and backend/schema.sql. Until BACKEND is
+   filled in, browsing works as normal and the shared features stay hidden. */
 const BACKEND = {
     supabaseUrl: "",   // e.g. "https://abcd1234.supabase.co"
-    supabaseKey: "",   // the anon/public key
+    supabaseKey: "",   // the anon/public key (safe to publish; the database rules do the protecting)
 };
 const BACKEND_READY = !!(BACKEND.supabaseUrl && BACKEND.supabaseKey);
-const sbFetch = (path, opts = {}) => fetch(`${BACKEND.supabaseUrl}/rest/v1/${path}`, { ...opts, headers: { apikey: BACKEND.supabaseKey, Authorization: `Bearer ${BACKEND.supabaseKey}`, "Content-Type": "application/json", Prefer: "return=representation", ...(opts.headers || {}) } });
+let sbClientPromise = null;
+function supabaseClient() {
+    if (!BACKEND_READY) return Promise.resolve(null);
+    return sbClientPromise ||= new Promise((resolve, reject) => {
+        const tag = document.createElement("script");
+        tag.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js";
+        tag.onload = () => resolve(window.supabase.createClient(BACKEND.supabaseUrl, BACKEND.supabaseKey));
+        tag.onerror = () => { sbClientPromise = null; reject(new Error("Couldn't load sign-in")); };
+        document.head.appendChild(tag);
+    });
+}
+const isVtEmail = (email) => /@vt\.edu$/i.test(email || "");
+async function signInWithVT() {
+    const sb = await supabaseClient();
+    // hd= asks Google to show only vt.edu accounts; the database rules enforce it.
+    await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + location.pathname, queryParams: { hd: "vt.edu", prompt: "select_account" } } });
+}
+/* Session -> { id, name, email } for a signed-in @vt.edu account, else null. */
+function useAccount(notify) {
+    const [account, setAccount] = useState(null);
+    useEffect(() => {
+        if (!BACKEND_READY) return;
+        let sub = null, alive = true;
+        const apply = async (session, sb) => {
+            const u = session?.user;
+            if (!u) { alive && setAccount(null); return; }
+            if (!isVtEmail(u.email)) {
+                await sb.auth.signOut();
+                notify && notify("Use your @vt.edu Google account to sign in.");
+                alive && setAccount(null);
+                return;
+            }
+            alive && setAccount({ id: u.id, email: u.email, name: u.user_metadata?.full_name || u.user_metadata?.name || u.email.split("@")[0] });
+        };
+        supabaseClient().then(async (sb) => {
+            const { data } = await sb.auth.getSession();
+            await apply(data.session, sb);
+            sub = sb.auth.onAuthStateChange((_e, session) => { apply(session, sb); }).data.subscription;
+        }).catch(() => notify && notify("Sign-in is unavailable right now."));
+        return () => { alive = false; sub && sub.unsubscribe(); };
+    }, []);
+    const signOut = async () => { const sb = await supabaseClient(); sb && await sb.auth.signOut(); setAccount(null); };
+    return { account, signIn: () => signInWithVT().catch(() => notify && notify("Sign-in is unavailable right now.")), signOut };
+}
 const LIVE = !!(window.HOKIE_LISTINGS && window.HOKIE_LISTINGS.length);
 const LIVE_META = LIVE ? window.HOKIE_META || {} : null;
 const DEMO_LISTINGS = [
@@ -859,9 +901,9 @@ function InquiryModal({ l, kind, unit, user, onClose, onSent, onContact }) {
    viewer's own entry, if any. */
 function InterestedSection({ l, people, mine, onJoin, onLeave, onMessage }) {
     const [editing, setEditing] = useState(false);
-    const [form, setForm] = useState(mine || { year: "Junior", major: "", budget: "", roommates: true, note: "" });
+    const [form, setForm] = useState(mine ? { ...mine, shareEmail: !!mine.email } : { year: "Junior", major: "", budget: "", roommates: true, note: "", shareEmail: false });
     const set = (k) => (e) => setForm({ ...form, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value });
-    const others = people.filter((p) => !mine || p.email !== mine.email);
+    const others = people.filter((p) => !mine || p.userId !== mine.userId);
     const inp = { padding: "9px 12px", borderRadius: 10, border: `1.5px solid ${T.line}`, fontSize: 16, fontFamily: "inherit", color: T.ink, boxSizing: "border-box", width: "100%" };
     return (React.createElement("div", { style: { marginTop: 22 } },
         React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" } },
@@ -872,7 +914,7 @@ function InterestedSection({ l, people, mine, onJoin, onLeave, onMessage }) {
             mine && !editing && React.createElement("div", { style: { display: "flex", gap: 6 } },
                 React.createElement("button", { className: "hk-btn", onClick: () => { setForm(mine); setEditing(true); }, style: { ...S.ghost, padding: "8px 12px", fontSize: 16 } }, "Edit"),
                 React.createElement("button", { className: "hk-btn", onClick: onLeave, style: { ...S.ghost, padding: "8px 12px", fontSize: 16, color: T.maroon } }, "Not anymore"))),
-        React.createElement("p", { style: { fontSize: 16, color: T.sub, margin: "4px 0 0" } }, "Add yourself so others looking at this place can find you.", BACKEND_READY ? "" : " Stored in this browser until a backend is connected."),
+        React.createElement("p", { style: { fontSize: 16, color: T.sub, margin: "4px 0 0" } }, "Add yourself so others looking at this place can find you. Signed-in VT students see your name and what you add; your email only if you allow it. Remove yourself anytime."),
         editing && (React.createElement("form", { className: "hk-fade", onSubmit: (e) => { e.preventDefault(); onJoin(form); setEditing(false); }, style: { ...S.card, padding: 14, marginTop: 10, display: "grid", gap: 8 } },
             React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 } },
                 React.createElement("select", { value: form.year, onChange: set("year"), style: inp }, ["Freshman", "Sophomore", "Junior", "Senior", "Grad"].map((y) => React.createElement("option", { key: y }, y))),
@@ -882,13 +924,16 @@ function InterestedSection({ l, people, mine, onJoin, onLeave, onMessage }) {
                 React.createElement("label", { style: { display: "flex", alignItems: "center", gap: 8, fontSize: 16, fontWeight: 700, color: T.ink } },
                     React.createElement("input", { type: "checkbox", checked: !!form.roommates, onChange: set("roommates") }),
                     "Looking for roommates")),
+            React.createElement("label", { style: { display: "flex", alignItems: "center", gap: 8, fontSize: 16, fontWeight: 700, color: T.ink } },
+                React.createElement("input", { type: "checkbox", checked: !!form.shareEmail, onChange: set("shareEmail") }),
+                "Let interested students email me"),
             React.createElement("input", { value: form.note, onChange: set("note"), placeholder: "One line about you \u2014 \u201Cclean, early riser, want a 4x4 for fall\u201D", style: inp }),
             React.createElement("div", { style: { display: "flex", gap: 8 } },
                 React.createElement("button", { type: "submit", className: "hk-btn", style: { ...S.primary, padding: "9px 16px", fontSize: 16 } }, mine ? "Save" : "Add me"),
                 React.createElement("button", { type: "button", className: "hk-btn", onClick: () => setEditing(false), style: { ...S.ghost, padding: "9px 14px", fontSize: 16 } }, "Cancel")))),
         React.createElement("div", { style: { display: "grid", gap: 8, marginTop: 10 } },
             mine && !editing && React.createElement(InterestCard, { p: mine, me: true }),
-            others.map((p) => React.createElement(InterestCard, { key: p.email, p: p, onMessage: () => onMessage(p) })),
+            others.map((p) => React.createElement(InterestCard, { key: p.userId || p.email, p: p, onMessage: () => onMessage(p) })),
             people.length === 0 && !editing && React.createElement("div", { style: { fontSize: 16, color: T.faint, padding: "10px 0" } }, "No one yet."))));
 }
 function InterestCard({ p, me, onMessage }) {
@@ -898,9 +943,9 @@ function InterestCard({ p, me, onMessage }) {
             React.createElement("div", { style: { fontWeight: 800, fontSize: 16, color: T.ink } }, p.name, me ? " (you)" : "", p.roommates && React.createElement(Badge, { tone: "green" }, " looking for roommates")),
             React.createElement("div", { style: { fontSize: 16, color: T.sub, marginTop: 2 } }, [p.year, p.major, p.budget ? `$${String(p.budget).replace(/^\$/, "")}` : null].filter(Boolean).join(" \u00B7 ")),
             p.note && React.createElement("div", { style: { fontSize: 16, color: T.ink, marginTop: 3, fontStyle: "italic" } }, "\u201C", p.note, "\u201D")),
-        !me && onMessage && React.createElement("button", { className: "hk-btn", onClick: onMessage, style: { ...S.ghost, padding: "7px 12px", fontSize: 16, flexShrink: 0 } }, "Email")));
+        !me && onMessage && p.email && React.createElement("button", { className: "hk-btn", onClick: onMessage, style: { ...S.ghost, padding: "7px 12px", fontSize: 16, flexShrink: 0 } }, "Email")));
 }
-function ListingDetail({ l, onClose, onInquiry, saved, onSave, userName, bedsWanted, interested, onJoinInterest, onLeaveInterest, onMessagePerson, user, onAskBot, onContact, onOpenListing }) {
+function ListingDetail({ l, onClose, onInquiry, saved, onSave, userName, bedsWanted, interested, onJoinInterest, onLeaveInterest, onMessagePerson, user, onAskBot, onContact, onOpenListing, account, onSignIn }) {
     const baseReviews = l.reviewsList || REVIEWS[l.id] || [];
     const parent = l.parentId ? LISTINGS.find((x) => x.id === l.parentId) || null : null;
     const children = (l.childIds || []).map((id) => LISTINGS.find((x) => x.id === id)).filter(Boolean);
@@ -967,7 +1012,7 @@ function ListingDetail({ l, onClose, onInquiry, saved, onSave, userName, bedsWan
             React.createElement("button", { className: "hk-btn", style: { ...S.ghost, width: "100%" }, onClick: () => onInquiry(l, "tour", unitSel) }, "Request a tour"),
             l.phone && React.createElement("a", { href: `tel:${l.phone.replace(/[^\d+]/g, "")}`, onClick: () => onContact(l, "phone", `tel:${l.phone.replace(/[^\d+]/g, "")}`, unitSel), className: "hk-btn", style: { ...S.ghost, width: "100%", textAlign: "center", textDecoration: "none", boxSizing: "border-box", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7 } }, React.createElement(Icon, { name: "phone", size: 15 }), l.phone)),
         unitSel && React.createElement("div", { style: { fontSize: 16, color: T.faint, marginTop: 8, textAlign: "center" } }, "Asking about: ", unitSel.label),
-        BACKEND_READY && user.email && (interested || []).length > 0 && React.createElement("div", { style: { fontSize: 16, color: T.sub, marginTop: 12, display: "flex", alignItems: "center", gap: 8 } },
+        BACKEND_READY && account && (interested || []).length > 0 && React.createElement("div", { style: { fontSize: 16, color: T.sub, marginTop: 12, display: "flex", alignItems: "center", gap: 8 } },
             React.createElement("div", { style: { display: "flex" } }, (interested || []).slice(0, 4).map((p, i) => React.createElement("span", { key: p.email, style: { width: 22, height: 22, borderRadius: 99, background: T.maroonSoft, color: T.maroon, fontSize: 16, fontWeight: 800, display: "grid", placeItems: "center", border: "2px solid #fff", marginLeft: i ? -6 : 0 } }, (p.name || "?").slice(0, 1).toUpperCase()))),
             React.createElement("b", { style: { color: T.ink } }, (interested || []).length), " student", (interested || []).length === 1 ? "" : "s", " interested"),
         (l.manager || l.website) && React.createElement("div", { style: { fontSize: 16, color: T.sub, marginTop: 14, lineHeight: 1.7, borderTop: `1px solid ${T.line}`, paddingTop: 12 } },
@@ -1081,7 +1126,12 @@ function ListingDetail({ l, onClose, onInquiry, saved, onSave, userName, bedsWan
                     React.createElement("p", { style: { fontSize: 16, lineHeight: 1.65, color: T.ink, margin: 0, whiteSpace: "pre-line" } }, l.desc)),
                 l.amenities.length > 0 && React.createElement("h3", { style: { fontSize: 17, fontWeight: 800, color: T.ink, margin: "22px 0 8px" } }, "Amenities"),
                 React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4 } }, l.amenities.map((a) => React.createElement("span", { key: a, style: { fontSize: 16, background: T.stone, color: T.sub, padding: "5px 11px", borderRadius: 99, fontWeight: 600 } }, a))),
-                BACKEND_READY && user.email && React.createElement(InterestedSection, { l: l, people: interested || [], mine: (interested || []).find((p) => user && p.email === user.email) || null, onJoin: (f) => onJoinInterest(l, f), onLeave: () => onLeaveInterest(l), onMessage: (p) => onMessagePerson(p, l) }),
+                BACKEND_READY && !account && React.createElement("div", { style: { ...S.card, padding: 16, marginTop: 22, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" } },
+                    React.createElement("div", null,
+                        React.createElement("div", { style: { fontWeight: 800, fontSize: 17, color: T.ink } }, "Looking for roommates here?"),
+                        React.createElement("div", { style: { fontSize: 16, color: T.sub, marginTop: 2 } }, "Sign in with your VT account to see which students are interested in this place.")),
+                    React.createElement("button", { className: "hk-btn", onClick: onSignIn, style: { ...S.primary, whiteSpace: "nowrap" } }, "Sign in with VT")),
+                BACKEND_READY && account && React.createElement(InterestedSection, { l: l, people: interested || [], mine: (interested || []).find((p) => p.userId === account.id) || null, onJoin: (f) => onJoinInterest(l, f), onLeave: () => onLeaveInterest(l), onMessage: (p) => onMessagePerson(p, l) }),
                 React.createElement("div", { style: { marginTop: 22 } },
                     React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" } },
                         React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", minWidth: 0 } },
@@ -2606,7 +2656,7 @@ function HokieProModal({ open, onClose, onSubscribe, onCancelPlan, isPro }) {
 }
 /* ---------------------------- ROOT APP ---------------------------- */
 function HokieHousing() {
-    const [user, setUser] = useState({ name: "", email: "", role: "Student", pro: false }); // Public browsing; real authentication will accompany shared features.
+    const [user, setUser] = useState({ name: "", email: "", role: "Student", pro: false }); // Public browsing; signing in is only needed for shared features.
     const [knownAccounts, setKnownAccounts] = usePersistentState("known_accounts", {});
     const registerAccount = (acct) => setKnownAccounts((k) => ({ ...k, [acct.email]: acct }));
     // Landlord vs Student is now chosen once at sign-up (separate accounts), not a
@@ -2703,29 +2753,35 @@ function HokieHousing() {
     };
     const [inquiry, setInquiry] = useState(null); // { l, kind }
     // "I'm interested" store: { [listingId]: [{name,email,year,major,budget,roommates,note,at}] }
-    const [interests, setInterests] = usePersistentState("interests", {});
-    useEffect(() => {
-        if (!BACKEND_READY || !user.email)
-            return;
-        sbFetch("interests?select=*&order=at.desc").then((r) => r.json()).then((rows) => {
-            if (!Array.isArray(rows))
-                return;
-            const byL = {};
-            rows.forEach((row) => { (byL[row.listing_id] = byL[row.listing_id] || []).push({ name: row.name, email: row.email, year: row.year, major: row.major, budget: row.budget, roommates: row.roommates, note: row.note, at: row.at }); });
-            setInterests(byL);
-        }).catch(() => { });
-    }, []);
-    const joinInterest = (l, form) => {
-        const entry = { name: user.name, email: user.email, year: form.year, major: form.major, budget: form.budget, roommates: !!form.roommates, note: form.note, at: new Date().toISOString() };
-        setInterests((m) => ({ ...m, [l.id]: [entry, ...(m[l.id] || []).filter((p) => p.email !== user.email)] }));
-        if (BACKEND_READY)
-            sbFetch(`interests?on_conflict=listing_id,email`, { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ listing_id: l.id, listing_name: l.name, ...entry }) }).catch(() => notify("Saved here, but couldn\u2019t sync to the server"));
-        notify("Added");
+    const { account, signIn, signOut } = useAccount((t) => notify(t));
+    useEffect(() => { setUser((u) => ({ ...u, name: account?.name || "", email: account?.email || "", id: account?.id || null })); }, [account?.id]);
+    const [interests, setInterests] = useState({});
+    const loadInterests = async () => {
+        const sb = await supabaseClient();
+        if (!sb || !account) { setInterests({}); return; }
+        const { data, error } = await sb.from("interests").select("*").order("at", { ascending: false });
+        if (error || !Array.isArray(data)) return;
+        const byL = {};
+        data.forEach((row) => { (byL[row.listing_id] ||= []).push({ userId: row.user_id, name: row.name, email: row.contact_email || null, year: row.year, major: row.major, budget: row.budget, roommates: row.roommates, note: row.note, at: row.at }); });
+        setInterests(byL);
     };
-    const leaveInterest = (l) => {
-        setInterests((m) => ({ ...m, [l.id]: (m[l.id] || []).filter((p) => p.email !== user.email) }));
-        if (BACKEND_READY)
-            sbFetch(`interests?listing_id=eq.${encodeURIComponent(l.id)}&email=eq.${encodeURIComponent(user.email)}`, { method: "DELETE", headers: { Prefer: "return=minimal" } }).catch(() => { });
+    useEffect(() => { loadInterests().catch(() => { }); }, [account?.id]);
+    const joinInterest = async (l, form) => {
+        const sb = await supabaseClient();
+        if (!sb || !account) return signIn();
+        const row = { listing_id: String(l.id), user_id: account.id, listing_name: l.name.slice(0, 200), name: account.name.slice(0, 80), contact_email: form.shareEmail ? account.email : null,
+            year: (form.year || "").slice(0, 20), major: (form.major || "").slice(0, 80), budget: (form.budget || "").slice(0, 40), roommates: !!form.roommates, note: (form.note || "").slice(0, 280), at: new Date().toISOString() };
+        const { error } = await sb.from("interests").upsert(row, { onConflict: "listing_id,user_id" });
+        if (error) { notify("Couldn\u2019t save that \u2014 try again."); return; }
+        notify("Added \u2014 other VT students looking at this place can see you");
+        loadInterests();
+    };
+    const leaveInterest = async (l) => {
+        const sb = await supabaseClient();
+        if (!sb || !account) return;
+        const { error } = await sb.from("interests").delete().eq("listing_id", String(l.id)).eq("user_id", account.id);
+        if (error) { notify("Couldn\u2019t remove that \u2014 try again."); return; }
+        loadInterests();
     };
     // Sent history: [{id, at, kind: inquiry|tour|person, to, toLabel, listingId, listingName, unit, subject, body, via}]
     const [sent, setSent] = usePersistentState("sent_messages", []);
@@ -2790,13 +2846,19 @@ function HokieHousing() {
                     React.createElement("div", { style: { cursor: "pointer", fontWeight: 900, fontSize: 21, letterSpacing: "-0.035em", color: T.maroon, lineHeight: 1, whiteSpace: "nowrap" }, onClick: () => { setTab(tabs[0][0]); setDetail(null); window.scrollTo(0, 0); } },
                         "hokie",
                         React.createElement("span", { style: { color: T.ink } }, "housing")),
+                    BACKEND_READY && React.createElement("div", { className: "hk-desktop-only", style: { order: 3, marginLeft: 8 } }, account
+                        ? React.createElement("button", { className: "hk-btn", onClick: signOut, title: account.email, style: { ...S.ghost, padding: "8px 14px", fontSize: 15 } }, "Sign out")
+                        : React.createElement("button", { className: "hk-btn", onClick: signIn, style: { ...S.primary, padding: "8px 14px", fontSize: 15 } }, "Sign in with VT")),
                     React.createElement("nav", { className: "hk-desktop-nav", "aria-label": "Main navigation", style: { display: "flex", gap: 6, marginLeft: "auto" } }, tabs.map(([k, label]) => React.createElement("button", { key: k, className: "hk-btn", "aria-current": tab === k ? "page" : undefined, onClick: () => { setTab(k); setDetail(null); window.scrollTo(0, 0); }, style: { padding: "10px 14px", fontSize: 16, fontWeight: 600, background: "transparent", color: T.sub, borderRadius: 9, whiteSpace: "nowrap" } }, label)))))),
         !detail && React.createElement("nav", { className: "hk-mobile-bottom-nav", "aria-label": "Main navigation" }, (role === "Landlord" ? tabs : [["home", "Home"], ["explore", "Search"], ["saved", "Saved"]]).map(([key, label]) => React.createElement("button", { key, className: "hk-btn", "aria-current": tab === key ? "page" : undefined, onClick: () => { setTab(key); setDetail(null); window.scrollTo(0, 0); } }, React.createElement(Icon, { name: key === "home" ? "home" : key === "saved" ? "heart" : key === "messages" ? "mail" : "search", size: 24 }), label))),
         menuOpen && React.createElement(DialogPanel, { label: "Menu", onClose: () => setMenuOpen(false), style: { position: "fixed", inset: 0, background: T.paper, zIndex: 95, padding: 24, display: "grid", alignContent: "start", gap: 16 } },
             React.createElement("button", { className: "hk-btn", style: S.ghost, onClick: () => setMenuOpen(false) }, "Close menu"),
             tabs.map(([key, label]) => React.createElement("button", { key, className: "hk-btn", style: S.ghost, onClick: () => { setTab(key); setDetail(null); setMenuOpen(false); window.scrollTo(0, 0); } }, label)),
-            React.createElement("button", { className: "hk-btn", style: S.primary, onClick: () => { setAiOpen(true); setMenuOpen(false); } }, "Housing assistant")),
-        detail && React.createElement(ListingDetail, { key: detail.id, onOpenListing: (x) => openListing(x), l: detail, bedsWanted: detailBeds, onClose: closeListing, onInquiry: (l, kind, unit) => setInquiry({ l, kind, unit }), saved: saved.includes(detail.id), onSave: toggleSave, userName: user.name, user: user, interested: interests[detail.id] || [], onJoinInterest: joinInterest, onLeaveInterest: leaveInterest, onMessagePerson: messagePerson, onContact: recordContact, onAskBot: (q) => { setAiPrefill(q); setAiOpen(true); } }),
+            React.createElement("button", { className: "hk-btn", style: S.primary, onClick: () => { setAiOpen(true); setMenuOpen(false); } }, "Housing assistant"),
+            BACKEND_READY && (account
+                ? React.createElement("button", { className: "hk-btn", style: S.ghost, onClick: () => { signOut(); setMenuOpen(false); } }, `Sign out (${account.email})`)
+                : React.createElement("button", { className: "hk-btn", style: S.ghost, onClick: signIn }, "Sign in with VT"))),
+        detail && React.createElement(ListingDetail, { key: detail.id, onOpenListing: (x) => openListing(x), l: detail, bedsWanted: detailBeds, onClose: closeListing, onInquiry: (l, kind, unit) => setInquiry({ l, kind, unit }), saved: saved.includes(detail.id), onSave: toggleSave, userName: user.name, user: user, interested: interests[detail.id] || [], account: account, onSignIn: signIn, onJoinInterest: joinInterest, onLeaveInterest: leaveInterest, onMessagePerson: messagePerson, onContact: recordContact, onAskBot: (q) => { setAiPrefill(q); setAiOpen(true); } }),
         React.createElement("main", { style: { display: detail ? "none" : undefined, maxWidth: (tab === "home" || (tab === "explore" && role !== "Landlord")) ? "none" : 1400, margin: "0 auto", padding: (tab === "home" || (tab === "explore" && role !== "Landlord")) ? 0 : "22px 18px 90px" } },
             tab === "home" && React.createElement(Home, { listings: allListings, saved, toggleSave, compare, toggleCompare, openListing, onSearch: startSearch }),
             tab === "explore" && role !== "Landlord" && React.createElement(Explore, { key: searchRequest.id, initialQuery: searchRequest.query, interests: {}, saved: saved, toggleSave: toggleSave, compare: compare, toggleCompare: toggleCompare, openListing: openListing, startMessage: startMessage, listings: allListings }),

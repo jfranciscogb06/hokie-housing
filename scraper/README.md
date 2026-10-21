@@ -129,14 +129,10 @@ way is logged in the **Sent** tab (with "Email again").
 To add a landlord email by hand, add `"email": "leasing@example.com"` to that listing in
 `data/listings.js` — or keep an overrides file and merge it in `scrape.py`.
 
-## Shared interested-student lists (staged)
+## Shared interested-student lists
 
-This feature is hidden in the public beta. It needs real authentication before
-profiles can be shared. Use authenticated user IDs for ownership, read policies
-limited to intended public profile fields, and insert/update/delete policies
-requiring `auth.uid() = user_id`. Never enable anonymous write/delete policies
-or use a typed email as proof of account ownership. Emails should not be exposed
-in a public table; use a consent-based contact flow.
+Now built: see [backend/README.md](../backend/README.md) — VT Google sign-in, owner-scoped
+database rules, and email shared only on opt-in. Never enable anonymous write policies.
 
 ## Known gaps / next steps
 
