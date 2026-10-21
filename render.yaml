@@ -1,0 +1,24 @@
+# Render Blueprint: New > Blueprint, pick this repo. One Node web service.
+services:
+  - type: web
+    name: hokie-housing
+    runtime: node
+    plan: starter            # a persistent disk needs a paid plan; free works without sponsorship metrics
+    buildCommand: "true"     # no dependencies or build step
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATA_DIR
+        value: /var/data
+      - key: OPENAI_API_KEY
+        sync: false          # set in the Render dashboard; optional (built-in search works without it)
+      - key: OPENAI_SEARCH_MODEL
+        value: gpt-4o-mini
+    disk:
+      name: hokie-data
+      mountPath: /var/data
+      sizeGB: 1
