@@ -41,4 +41,5 @@ jobs:
           if git diff --cached --quiet; then echo "No catalog changes."; exit 0; fi
           git -c user.name="hokie-housing-bot" -c user.email="actions@users.noreply.github.com" \
             commit -m "Refresh listings ($(date -u +%Y-%m-%d))"
+          git pull --rebase origin main   # someone may have pushed while this ran
           git push
