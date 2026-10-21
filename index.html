@@ -368,6 +368,7 @@ const css = `
   .hk-landing-bottom { position:absolute; bottom:40px; left:28px; right:28px; display:flex; justify-content:space-between; align-items:center; gap:20px; }
   .hk-landing-scroll { display:inline-flex; align-items:center; gap:12px; padding:8px 0; background:transparent; color:#fff; font-size:16px; font-weight:600; }
   .hk-landing-scroll svg { animation:scrollHint 2.5s ease-in-out infinite; }
+  .hk-landing-credit { margin-left:auto; }
   .hk-landing-credit { font-size:16px; line-height:1.5; text-align:right; color:#FFFFFFD9; padding-right:72px; }
   .hk-landing-credit a { color:inherit; text-underline-offset:3px; }
   @keyframes townDrift { from { transform:scale(1.035) translateX(-.6%); } to { transform:scale(1.10) translateX(.6%); } }
@@ -457,6 +458,7 @@ const css = `
   }
   .hk-mobile-only, .hk-mobile-bottom-nav { display:none; }
   @media(max-width:1200px) { .hk-home-cards { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+  @media(min-width:1001px) and (max-width:1200px) { .hk-home-cards > :nth-child(4) { display:none; } }
   @media(max-width:1000px) { .hk-home-cards { grid-template-columns:repeat(2,minmax(0,1fr)); } .hk-results-cards { grid-template-columns:1fr; } }
   @media(max-width:760px) {
     .hk-desktop-only, .hk-account-controls, .hk-desktop-nav { display:none !important; }
@@ -488,8 +490,11 @@ const css = `
     .hk-home-section-heading { align-items:center; gap:8px; flex-wrap:wrap; }
     .hk-home-section-heading h2 { font-size:22px; }
     .hk-home-view-all { font-size:16px; padding:3px 0; }
-    .hk-home-cards { grid-template-columns:1fr; gap:30px; }
-    .hk-home-cards .hk-listing-image { height:230px !important; }
+    /* Phones: each homepage row is a sideways swipe instead of four stacked cards. */
+    .hk-home-cards { grid-template-columns:none; grid-auto-flow:column; grid-auto-columns:82%; gap:14px; overflow-x:auto; scroll-snap-type:x mandatory; padding-bottom:6px; scrollbar-width:none; }
+    .hk-home-cards::-webkit-scrollbar { display:none; }
+    .hk-home-cards > * { scroll-snap-align:start; }
+    .hk-home-cards .hk-listing-image { height:210px !important; }
     .hk-sponsored-grid { grid-template-columns:1fr; gap:14px; }
     .hk-sponsored-card { grid-template-columns:116px minmax(0,1fr); }
     .hk-sponsored-content { padding:10px 12px; }
@@ -1525,7 +1530,6 @@ function Landing({ onExplore }) {
             React.createElement('p', null, 'Off-campus living. All in one place.'),
             React.createElement('button', { className: 'hk-btn hk-landing-cta', onClick: onExplore }, 'Explore housing', React.createElement(Icon, { name: 'chevronR', size: 23, style: { transform: 'rotate(90deg)' } }))),
         React.createElement('div', { className: 'hk-landing-bottom' },
-            React.createElement('button', { className: 'hk-btn hk-landing-scroll', onClick: onExplore, 'aria-label': 'Scroll to housing tools' }, 'Scroll to explore', React.createElement(Icon, { name: 'chevronR', size: 21, style: { transform: 'rotate(90deg)' } })),
             React.createElement('div', { className: 'hk-landing-credit' },
                 React.createElement('a', { href: 'https://commons.wikimedia.org/wiki/File:Blacksburg,_Virginia.jpg', target: '_blank', rel: 'noopener noreferrer', title: 'Photo by Smash the Iron Cage; resized and cropped for display.' }, 'Photo: Smash the Iron Cage'), ' · ',
                 React.createElement('a', { href: 'https://creativecommons.org/licenses/by-sa/4.0/', target: '_blank', rel: 'noopener noreferrer' }, 'CC BY-SA 4.0'))));
@@ -1583,8 +1587,25 @@ function Home({ listings, saved, toggleSave, compare, toggleCompare, openListing
         return () => { controller.abort(); clearInterval(interval); document.removeEventListener('visibilitychange', load); };
     }, [preview]);
     const ads = campaigns.map(c => ({ campaign: c, l: listings.find(l => String(l.id) === c.listingId) })).filter(a => a.l).slice(0, 2);
-    const nearCampus = listings.filter(l => l.eligibility?.undergrad === true && l.photos?.length && !l.sublet && l.walk != null && l.walk <= 25);
-    const picks = [...nearCampus].sort((a, b) => a.walk - b.walk).slice(0, 4);
+    // Homepage rows. Each row is a saved search: its cards are the top matches for the query
+    // (so "View all" shows the same set), only listings with photos, no listing in two rows.
+    const ROWS = [
+        { id: 'near', title: 'Near campus', hint: 'Within a 25-minute walk and listed as undergrad-friendly', query: 'undergrad near campus', sort: (a, b) => a.walk - b.walk },
+        { id: 'value', title: 'Under $800', hint: 'Cheapest first', query: 'cheapest under $800', sort: (a, b) => a.price - b.price },
+        { id: 'houses', title: 'Houses for groups', hint: 'Houses with 3 or more bedrooms', query: 'house 3+ bedrooms', sort: (a, b) => (b.rating || 0) - (a.rating || 0) || a.walk - b.walk },
+        { id: 'bus', title: 'Next to a bus stop', hint: 'A Blacksburg Transit stop within a 2-minute walk', query: '2 min walk to a bus stop', sort: (a, b) => a.busStop.walkMin - b.busStop.walkMin || a.walk - b.walk },
+        { id: 'pets', title: 'Pet friendly', hint: 'Listings that allow pets', query: 'pet friendly', sort: (a, b) => a.walk - b.walk },
+    ];
+    const rows = useMemo(() => {
+        const used = new Set();
+        return ROWS.map(row => {
+            const c = HousingSearch.local(row.query);
+            const matches = listings.filter(l => !l.parentId && l.photos?.length && c.filter(l) && HousingSearch.matchesText(l, c.text));
+            const picks = matches.sort(row.sort).filter(l => !used.has(l.id)).slice(0, 4);
+            picks.forEach(l => used.add(l.id));
+            return { ...row, picks, total: matches.length };
+        }).filter(row => row.picks.length >= 2);
+    }, [listings]);
     const shortcuts = [
         { label: 'Under $900', icon: 'sliders', query: 'under $900' },
         { label: 'Walk to campus', icon: 'walk', query: '15 min walk to campus' },
@@ -1610,10 +1631,11 @@ function Home({ listings, saved, toggleSave, compare, toggleCompare, openListing
             ads.length > 0 && React.createElement('section', { className: 'hk-home-section hk-home-sponsored', 'aria-labelledby': 'sponsored-heading' },
                 React.createElement('div', { className: 'hk-home-section-heading' }, React.createElement('h2', { id: 'sponsored-heading' }, 'Featured housing'), preview && React.createElement('span', { className: 'hk-sponsor-preview-note' }, 'Example placements · no live advertisers')),
                 React.createElement('div', { className: 'hk-sponsored-grid' }, ads.map(({ campaign, l }) => React.createElement(SponsoredPlace, { key: campaign.id, campaign, l, saved: saved.includes(l.id), onSave: toggleSave, onOpen: openListing })))),
-            React.createElement('section', { className: 'hk-home-section', 'aria-labelledby': 'home-listings-heading' },
-                React.createElement('div', { className: 'hk-home-section-heading' }, React.createElement('h2', { id: 'home-listings-heading', title: 'Within a 25-minute walk and listed as undergrad-friendly' }, 'Near campus'),
-                    React.createElement('button', { className: 'hk-btn hk-home-view-all', onClick: () => onSearch('') }, 'View all', React.createElement(Icon, { name: 'chevronR', size: 17 }))),
-                React.createElement('div', { className: 'hk-home-cards' }, picks.map(l => React.createElement(ListingCard, { key: l.id, l, saved: saved.includes(l.id), onSave: toggleSave, compared: compare.includes(l.id), onCompare: toggleCompare, onOpen: openListing }))))));
+            rows.map(row => React.createElement('section', { key: row.id, className: 'hk-home-section', 'aria-labelledby': `home-row-${row.id}` },
+                React.createElement('div', { className: 'hk-home-section-heading' },
+                    React.createElement('h2', { id: `home-row-${row.id}`, title: row.hint }, row.title),
+                    React.createElement('button', { className: 'hk-btn hk-home-view-all', onClick: () => onSearch(row.query) }, 'View all', React.createElement(Icon, { name: 'chevronR', size: 17 }))),
+                React.createElement('div', { className: 'hk-home-cards' }, row.picks.map(l => React.createElement(ListingCard, { key: l.id, l, saved: saved.includes(l.id), onSave: toggleSave, compared: compare.includes(l.id), onCompare: toggleCompare, onOpen: openListing })))))));
 }
 const DEFAULT_F = { max: 9999, beds: 0, walk: 9999, furnished: false, utilities: false, pets: false, bus: 0, lease: 0, audience: "" };
 function Explore({ saved, toggleSave, compare, toggleCompare, openListing, startMessage, listings, interests = {}, initialQuery = "" }) {
@@ -3048,11 +3070,11 @@ function HokieHousing() {
             (tab === "privacy" || tab === "terms") && React.createElement(LegalPage, { kind: tab, onBack: () => { setTab("home"); window.scrollTo(0, 0); } })),
         React.createElement("footer", { style: { display: !detail && tab === "explore" && role !== "Landlord" ? "none" : undefined, borderTop: `1px solid ${T.line}`, marginTop: 8 } },
             React.createElement("div", { style: { maxWidth: 1400, margin: "0 auto", padding: "22px 96px 34px 18px", display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 14 } },
-                React.createElement("div", { style: { fontSize: 16, color: T.faint, lineHeight: 1.7, maxWidth: 640 } },
+                React.createElement("div", { style: { fontSize: 13.5, color: T.faint, lineHeight: 1.6, maxWidth: 640 } },
                     React.createElement("b", { style: { color: T.sub } }, "Hokie Housing"),
                     " is an independent student project, not affiliated with Virginia Tech. Confirm price and availability with the property."),
-                React.createElement("nav", { "aria-label": "Site information", style: { fontSize: 16, color: T.faint, display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" } },
-                    [["privacy", "Privacy"], ["terms", "Terms"], ...(CONTACT.inbox ? [["advertise", "For property managers"]] : [])].map(([k, label]) => React.createElement("button", { key: k, className: "hk-btn", onClick: () => { setTab(k); setDetail(null); window.scrollTo(0, 0); }, style: { background: "transparent", color: T.sub, fontWeight: 700, fontSize: 16, padding: 0, minHeight: 0, textDecoration: "underline" } }, label)),
+                React.createElement("nav", { "aria-label": "Site information", style: { fontSize: 13.5, color: T.faint, display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" } },
+                    [["privacy", "Privacy"], ["terms", "Terms"], ...(CONTACT.inbox ? [["advertise", "For property managers"]] : [])].map(([k, label]) => React.createElement("button", { key: k, className: "hk-btn", onClick: () => { setTab(k); setDetail(null); window.scrollTo(0, 0); }, style: { background: "transparent", color: T.sub, fontWeight: 600, fontSize: 13.5, padding: 0, minHeight: 0, textDecoration: "underline" } }, label)),
                     "Blacksburg, VA"))),
         inquiry && React.createElement(InquiryModal, { l: inquiry.l, kind: inquiry.kind, unit: inquiry.unit, user: user, onContact: recordContact, onClose: () => setInquiry(null), onSent: (body, note, extra) => recordInquiry(inquiry.l, inquiry.kind, body, note, extra) }),
         role !== "Landlord" && React.createElement(AIAssistant, { open: aiOpen, setOpen: setAiOpen, openListing: openListing, goToSublease: goToSublease, prefill: aiPrefill, onPrefillUsed: () => setAiPrefill("") }),
