@@ -315,6 +315,71 @@ def _gradient(site_id: str) -> str:
     return f"linear-gradient(135deg, hsl({h % 360},38%,42%), hsl({(h // 360) % 360},45%,62%))"
 
 
+_PER_PERSON_TEXT = re.compile(r"\bper[- ](?:bed(?:room)?|person|room|student|tenant)\b|/\s?(?:bed|person|room)\b|\bindividual(?:ly)?[- ]leas|\bby[- ]the[- ]bed\b", re.I)
+
+
+def price_bases(fps: list[dict], text: str, shared: bool) -> list[str]:
+    """How each floor plan's rent is quoted: 'room' (one room in a shared unit), 'bed'
+    (per person) or 'unit' (the whole apartment/house). The portal's per-bed flag is
+    reliable when set but often missing (Hub flags 1 of 17 plans). Some buildings list a
+    unit twice, per bed (flagged) and at the whole-unit price (a multiple of it). Other
+    evidence: listing text, and bigger plans priced below smaller ones (by the bed)."""
+    clue = bool(_PER_PERSON_TEXT.search(text or ""))
+    flagged: dict[int, float] = {}  # beds -> lowest flagged per-bed price
+    by_beds: dict[int, float] = {}
+    for fp in fps:
+        b, lo = fp.get("beds") or 0, fp.get("priceLow") or 0
+        if b >= 1 and lo:
+            by_beds[b] = min(by_beds.get(b, 9e9), lo)
+        if fp.get("perBedPricing") and lo:
+            flagged[b] = min(flagged.get(b, 9e9), lo)
+    ks = sorted(by_beds)
+    inverted = len(ks) >= 2 and by_beds[ks[-1]] < by_beds[ks[0]]
+    out = []
+    for fp in fps:
+        b, lo = fp.get("beds") or 0, fp.get("priceLow") or 0
+        if shared:
+            # a "room" ad priced like the whole place ("full house rent is $1800")
+            out.append("unit" if b >= 2 and lo >= 1500 else "room")
+        elif b >= 2 and lo and lo / b < 300:
+            out.append("bed")  # too cheap to be the whole apartment
+        elif fp.get("perBedPricing"):
+            out.append("bed")
+        elif b in flagged and lo >= flagged[b] * 1.5:
+            out.append("unit")  # the flagged unit again, at its whole-unit price
+        elif any(abs(lo - f) <= f * 0.25 for f in flagged.values()):
+            out.append("bed")  # priced like the flagged plans
+        elif clue and (b <= 1 or (lo and lo < 1600)):
+            out.append("bed")
+        else:
+            out.append("bed" if inverted else "unit")
+    return out
+
+
+def per_person(amount, basis: str, beds) -> int | None:
+    if not amount:
+        return None
+    return round(amount / max(beds or 0, 1)) if basis == "unit" else round(amount)
+
+
+def money_label(lo, hi) -> str:
+    if not lo:
+        return ""
+    return f"${lo:,}" if not hi or hi == lo else f"${lo:,} - ${hi:,}"
+
+
+def plan_prices(fp: dict, basis: str) -> dict:
+    """Per-person rent for one plan, plus the whole-unit rent when it was split."""
+    b, lo = fp.get("beds") or 0, fp.get("priceLow")
+    hi = fp.get("priceHigh") or lo
+    if basis == "bed" and b >= 2 and lo and hi >= lo * 1.8:
+        hi = max(lo, round(hi / b))  # "$1,319 - $5,276": the range ends at the whole-unit price
+    split = basis == "unit" and b >= 2
+    pp_lo, pp_hi = per_person(lo, basis, b), per_person(hi, basis, b)
+    return {"basis": basis, "price": pp_lo, "priceHigh": pp_hi, "priceLabel": money_label(pp_lo, pp_hi),
+            "priceTotal": lo if split else None, "priceTotalHigh": hi if split else None}
+
+
 def to_app(site_id: str, p: dict, d: dict | None, amenities: dict[str, str], photos: list[str], extra: dict[str, list[str]] | None = None) -> dict:
     """Map a placard (+ optional detail record) onto the shape hokie.html renders."""
     d = d or {}
@@ -365,20 +430,12 @@ def to_app(site_id: str, p: dict, d: dict | None, amenities: dict[str, str], pho
         n = (p.get("name") or "").lower()
         style = "Townhouse" if "townhouse" in n or "townhome" in n else "House" if "house" in n or "home" in n else "Condo" if "condo" in n else "Duplex" if "duplex" in n else "Apartment"
 
-    # The portal's hasPerBedPricing flag is unreliable (Hub is "not per bed" at $999 for a
-    # 4-bed; Old Row is "per bed" at $2,898 for a 2-bed). Derive it from the numbers instead:
-    # if splitting the rent across the bedrooms lands under $450/bed, it's already per-bed.
-    lo, nb = price.get("low") or 0, beds.get("low") or 0
-    per_bed = bool(nb >= 2 and lo and lo / nb < 450)
-    # Second signal, for communities with several plans: if a bigger unit is priced at or
-    # below a smaller one (Hub's 2x2 at $1,375 vs its 1x1 at $1,859) the numbers are per bed.
-    by_beds = {}
-    for fp in fps:
-        if fp.get("beds") and fp.get("priceLow"):
-            by_beds[fp["beds"]] = min(by_beds.get(fp["beds"], 9e9), fp["priceLow"])
-    ks = sorted(by_beds)
-    if any(by_beds[b2] <= by_beds[b1] for i, b1 in enumerate(ks) for b2 in ks[i + 1:]):
-        per_bed = True
+    # Rent basis per plan, then everything the site shows is per person. When the portal
+    # has no floor plans, treat the listing's own price range as a single plan.
+    plan_src = [fp for fp in fps if fp.get("beds") is not None] or [{"beds": beds.get("low"), "priceLow": price.get("low"), "priceHigh": price.get("high")}]
+    bases = price_bases(plan_src, f"{p.get('name') or ''} {d.get('longDescription') or ''}", bool(p.get("isSharedSpace")))
+    priced = [plan_prices(fp, b) for fp, b in zip(plan_src, bases)]
+    prices_of = {id(fp): pr for fp, pr in zip(plan_src, priced)}
 
     pets_no = has("pets not allowed", "no pets")
     pets = (not pets_no) and (has("pets allowed", "cats allowed", "dogs allowed", "small dogs", "pet friendly") or bool(d.get("petAmenities")))
@@ -399,22 +456,30 @@ def to_app(site_id: str, p: dict, d: dict | None, amenities: dict[str, str], pho
         "id": fp.get("id") or fp.get("unitKey") or str(i),
         "name": fp.get("name") or f"{fp.get('beds')} bed / {fp.get('baths')} bath",
         "beds": fp.get("beds"), "baths": fp.get("baths"),
-        "price": fp.get("priceLow"), "priceHigh": fp.get("priceHigh"), "priceLabel": fp.get("priceRange"),
+        **prices_of[id(fp)],  # per person (what students compare), plus the unit total when split
         "sqft": fp.get("squareFeet"),
         # status: AvailableNow | FutureDate | AvailableSoon | CallForAvailability | NotAvailable
         "status": fp.get("availability"), "availability": fp.get("availabilityDescription"),
         "availableDate": (fp.get("availableDate") or "")[:10] or None, "units": fp.get("unitsAvailable"),
         "image": plan_by_id.get(str(fp.get("id") or fp.get("unitKey") or i)) or plan_photos.get(str(fp.get("beds"))),
     } for i, fp in enumerate(fps) if fp.get("beds") is not None]
+    # Listing price = the cheapest per-person option; priceTotal is that plan's whole-unit
+    # rent when it was split, so cards can show "$950/person · $2,850 total".
+    with_price = [pr for pr in priced if pr["price"]]
+    cheapest = min(with_price, key=lambda pr: pr["price"]) if with_price else {}
+    pp_lo, total = cheapest.get("price"), cheapest.get("priceTotal")
+    pp_hi = max((pr["priceHigh"] for pr in with_price), default=None)
+    price_basis = bases[0] if len(set(bases)) == 1 else "mixed"
 
     return {
         "id": site_id,
         "name": p.get("name") or d.get("name") or street or "Listing",
         "type": style,
-        "price": price.get("low") or 0,
-        "priceHigh": price.get("high") or price.get("low") or 0,
-        "priceLabel": price.get("formatted") or p.get("totalMonthlyPrice") or "",
-        "perBed": per_bed,
+        "price": pp_lo or 0,                 # per person, lowest
+        "priceHigh": pp_hi or pp_lo or 0,    # per person, highest
+        "priceLabel": money_label(pp_lo, pp_hi),
+        "priceTotal": total,                 # whole-unit rent behind `price`, when it was split
+        "priceBasis": price_basis,           # bed | unit | room | mixed
         "beds": beds.get("low") if beds.get("low") is not None else 0,
         "bedsHigh": beds.get("high") if beds.get("high") is not None else beds.get("low") or 0,
         "baths": baths.get("low") if baths.get("low") is not None else 1,
@@ -470,13 +535,13 @@ def _median(xs):
 
 def build_overview(l: dict, medians: dict) -> tuple[str, list[str], list[str]]:
     """A plain-English summary plus pros/cons, derived from the record (no LLM).
-    `medians` = {beds: median per-bed-or-unit price for that bed count} for fair price calls."""
+    `medians` = {beds: median per-person rent for that bed count} for fair price calls."""
     pros, cons = [], []
     am = " ".join(l.get("amenities") or []).lower()
     stop = l.get("busStop")
     walk, drive = l.get("walk"), l.get("driveMin")
     nb = l.get("beds") or 0
-    unit = "/bed" if l.get("perBed") else "/mo"
+    unit = "/person"
 
     if walk is not None and walk <= 15:
         pros.append(f"{walk}-min walk to campus")

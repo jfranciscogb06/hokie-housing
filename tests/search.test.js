@@ -40,7 +40,18 @@ test("rent and bedrooms must match a single floor plan; unknown rent is excluded
     l.plans.push({ beds: 3, price: 900 }); assert.equal(p.filter(l), true);
     assert.deepEqual(p.matchingPlans(l), [l.plans[2]]);
     assert.equal(Search.local("under $1000").filter({ price: 0 }), false);
-    assert.equal(Search.local("under $1000 per bed").filter({ price: 800, perBed: false }), false);
+});
+test("rent is per person; whole-unit budgets compare unit totals", () => {
+    const split = { price: 950, priceTotal: 2850, beds: 3, basis: "unit" };   // $2,850 apartment, 3 people
+    const byBed = { price: 1140, beds: 4, basis: "bed" };                      // $1,140 per bed, 4 beds
+    const room = { price: 800, beds: 1, basis: "room" };
+    assert.equal(Search.local("under $1000 per person").filter(split), true);
+    assert.equal(Search.local("under $1000").filter(byBed), false);
+    assert.equal(Search.local("whole unit under $2500").filter(split), false);
+    assert.equal(Search.local("whole unit under $3000").filter(split), true);
+    assert.equal(Search.local("whole house under $4000").filter({ plans: [byBed] }), false);
+    assert.equal(Search.local("whole unit under $5000").filter({ plans: [byBed] }), true);
+    assert.equal(Search.local("whole unit under $3000").filter({ plans: [room] }), false);
 });
 test("description restrictions override broad tags; unknown eligibility stays unknown", () => {
     for (const desc of ["Undergrads not permitted.", "Undergraduates are not allowed.", "No undergrads permitted", "Grad students and faculty only", "Only for graduate students", "Not open to undergrads"]) {

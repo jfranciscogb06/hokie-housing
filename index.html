@@ -266,8 +266,12 @@ const LISTINGS = HousingCatalog.normalize(LIVE ? window.HOKIE_LISTINGS : DEMO_LI
         cons: eligibility.undergrad === false ? [...new Set([...(l.cons || []), "Undergrads not allowed"])] : l.cons };
 });
 const LANDLORD_LISTING_IDS = LIVE ? LISTINGS.slice(0, 3).map((l) => l.id) : [5, 9, 13];
-// Per-bed vs whole-unit pricing: the demo list is all per-bed; scraped listings say which.
-const priceUnit = (l) => (l.perBed === false ? "/mo" : "/bed");
+// Rent is shown per person everywhere. Whole-unit rents are split by bedroom count in the
+// scraper, and priceTotal keeps the quoted rent so pages can say "$2,850 total".
+const priceUnit = () => "/person";
+const usd = (v) => `$${Number(v).toLocaleString()}`;
+const cheapestPlan = (plans) => plans.filter((p) => p.price > 0).reduce((a, p) => (!a || p.price < a.price ? p : a), null);
+const totalLabel = (x) => (x && x.priceTotal ? `${usd(x.priceTotal)}${x.priceTotalHigh > x.priceTotal ? ` - ${usd(x.priceTotalHigh)}` : ""} total` : "");
 const bedsLabel = (l) => (l.beds === 0 && !(l.bedsHigh > 0) ? "Studio" : l.bedsHigh > l.beds ? `${l.beds || "Studio"}–${l.bedsHigh} bed` : `${l.beds} bed`);
 const timeAgo = (iso) => { if (!iso) return ""; const h = Math.max(0, (Date.now() - new Date(iso)) / 36e5); return h < 1 ? "just now" : h < 24 ? `${Math.round(h)}h ago` : `${Math.round(h / 24)}d ago`; };
 const SUBLEASES = [
@@ -399,6 +403,7 @@ const css = `
   .hk-home-cards .hk-listing-content { padding:14px 0 0 !important; }
   .hk-home-cards .hk-listing-price { font-size:26px !important; font-weight:700 !important; }
   .hk-home-cards .hk-listing-price > span { margin-left:3px; font-size:16px !important; font-weight:500 !important; }
+  .hk-listing-price .hk-listing-total, .hk-home-cards .hk-listing-price > .hk-listing-total { margin-left:8px; font-size:14px !important; font-weight:500 !important; color:#71717A; letter-spacing:0; white-space:nowrap; }
   .hk-home-cards .hk-listing-name { font-size:18px !important; font-weight:600 !important; margin-top:8px !important; white-space:normal !important; line-height:1.4; min-height:2.8em; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
   .hk-home-cards .hk-listing-meta { font-size:16px !important; color:#71717A !important; margin-top:6px !important; white-space:normal !important; line-height:1.5; min-height:3em; }
   .hk-home-cards .hk-badge { font-size:16px !important; font-weight:600 !important; }
@@ -794,6 +799,8 @@ function ListingCard({ l, saved, onSave, compared, onCompare, onOpen, bedsWanted
     const display = matchingPlans?.length ? { ...l, price: Math.min(...matchingPlans.map(p => p.price).filter(p => p > 0)),
         beds: Math.min(...matchingPlans.map(p => p.beds)), bedsHigh: Math.max(...matchingPlans.map(p => p.beds)), baths: Math.min(...matchingPlans.map(p => p.baths)) } : l;
     const meta = [bedsLabel(display), `${display.baths} bath`, l.area].filter(Boolean).join(" \u00B7 ");
+    const totalOf = matchingPlans?.length ? cheapestPlan(matchingPlans) : l;
+    const total = totalOf?.priceTotal ? `${usd(totalOf.priceTotal)} total` : "";
     return (React.createElement("div", { className: "hk-card hk-fade hk-listing-card", style: { ...S.card, cursor: "pointer", borderRadius: 18 }, onClick: () => onOpen(l, bedsWanted) },
         React.createElement("div", { className: "hk-listing-image", style: { height: 190, background: l.img, position: "relative", overflow: "hidden" } },
             React.createElement(PhotoCarousel, { l: l, photos: ph.list, resetKey: bedsWanted }),
@@ -808,7 +815,8 @@ function ListingCard({ l, saved, onSave, compared, onCompare, onOpen, bedsWanted
             React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 } },
                 React.createElement("div", { className: "hk-listing-price", style: { fontWeight: 800, fontSize: 19, color: T.ink, letterSpacing: "-0.01em" } },
                     display.price > 0 && Number.isFinite(display.price) ? "$" + display.price.toLocaleString() : "Ask for rent",
-                    React.createElement("span", { style: { fontSize: 16, color: T.faint, fontWeight: 600 } }, priceUnit(l))),
+                    display.price > 0 && React.createElement("span", { style: { fontSize: 16, color: T.faint, fontWeight: 600 } }, priceUnit(l)),
+                    total && React.createElement("span", { className: "hk-listing-total" }, total)),
                 l.reviews > 0 ? React.createElement("span", { style: { fontSize: 16, color: T.sub, fontWeight: 700, whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 3 } }, React.createElement(Icon, { name: "star", size: 12, style: { color: T.gold } }), l.rating, React.createElement("span", { style: { color: T.faint, fontWeight: 500 } }, ` (${l.reviews})`)) : null),
             React.createElement("div", { className: "hk-listing-name", style: { fontWeight: 700, fontSize: 16, color: T.ink, marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, l.name),
             React.createElement("div", { className: "hk-listing-meta", style: { fontSize: 16, color: T.sub, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, meta),
@@ -850,7 +858,7 @@ function InquiryModal({ l, kind, unit, user, onClose, onSent, onContact }) {
         name: user.name || "", email: isVtEmail(user.email) ? user.email : "", phone: "", moveIn: "", tourWhen: "", website: "",
         message: kind === "tour"
             ? `Hi! I'd like to schedule a tour of ${what}${l.address ? ` (${l.address})` : ""}. When are you available?`
-            : `Hi! I'm a Virginia Tech student interested in ${what}${l.address ? `, ${l.address}` : ""}. Is it still available${unit ? "" : l.price ? ` at $${l.price}${priceUnit(l)}` : ""}? Thanks!`,
+            : `Hi! I'm a Virginia Tech student interested in ${what}${l.address ? `, ${l.address}` : ""}. Is it still available${unit ? "" : l.priceTotal ? ` at ${usd(l.priceTotal)} a month` : l.price ? ` at ${usd(l.price)} per person` : ""}? Thanks!`,
     });
     const [status, setStatus] = useState("idle"); // idle | sending | sent | draft
     const [error, setError] = useState("");
@@ -1015,15 +1023,21 @@ function ListingDetail({ l, onClose, onInquiry, saved, onSave, userName, bedsWan
     const shownPlans = orderedPlans.filter((p) => bedsSel === null || p.beds === bedsSel);
     // header price: the selected plan's; else the cheapest plan with the selected bed
     // count (matches what the search card showed); else the listing's lowest rent.
-    const bedPrices = bedsSel !== null ? plans.filter((p) => p.beds === bedsSel && p.price > 0).map((p) => p.price) : [];
-    const money = (v) => `$${Number(v).toLocaleString()}`;
+    const bedPlans = bedsSel !== null ? plans.filter((p) => p.beds === bedsSel && p.price > 0) : [];
+    const bedPrices = bedPlans.map((p) => p.price);
+    const money = usd;
     const headPrice = plan ? (plan.priceLabel || (plan.price ? money(plan.price) : ""))
         : bedPrices.length ? money(Math.min(...bedPrices)) : money(l.price);
     const headRange = !plan && bedPrices.length > 1 && Math.max(...bedPrices) > Math.min(...bedPrices)
         ? `${money(Math.min(...bedPrices))} - ${money(Math.max(...bedPrices))}${priceUnit(l)} for ${bedWord(bedsSel).toLowerCase()} plans` : null;
+    // The quoted whole-unit rent behind the per-person price, when it was split.
+    const split = (plan ? [plan] : bedPlans.length ? bedPlans : [cheapestPlan(plans) || l]).filter((p) => p && p.priceTotal);
+    const splitLo = split.length ? Math.min(...split.map((p) => p.priceTotal)) : 0;
+    const splitHi = split.length ? Math.max(...split.map((p) => p.priceTotalHigh || p.priceTotal)) : 0;
+    const splitLine = split.length ? `Whole unit ${money(splitLo)}${splitHi > splitLo ? ` - ${money(splitHi)}` : ""}/mo, split ${split[0].beds} ways` : null;
     // what the student is asking about, for the Request info email
     const unitSel = plan
-        ? { label: `${plan.name} (${bedWord(plan.beds)} / ${plan.baths} bath${plan.sqft ? `, ${plan.sqft}` : ""}${plan.priceLabel ? `, ${plan.priceLabel}${priceUnit(l)}` : ""})`, beds: plan.beds }
+        ? { label: `${plan.name} (${bedWord(plan.beds)} / ${plan.baths} bath${plan.sqft ? `, ${plan.sqft}` : ""}${plan.priceTotal ? `, ${totalLabel(plan)}` : plan.priceLabel ? `, ${plan.priceLabel} per person` : ""})`, beds: plan.beds }
         : bedsSel !== null ? { label: `a ${bedWord(bedsSel)} unit`, beds: bedsSel } : null;
     const [myReviews, setMyReviews] = usePersistentState("reviews_extra_" + l.id, []);
     const [writing, setWriting] = useState(false);
@@ -1048,6 +1062,7 @@ function ListingDetail({ l, onClose, onInquiry, saved, onSave, userName, bedsWan
         plan ? React.createElement("div", { style: { fontSize: 16, color: T.sub, marginTop: 2 } }, plan.name, " \u00B7 ", bedWord(plan.beds), " / ", plan.baths, " bath", plan.sqft ? ` \u00B7 ${plan.sqft}` : "")
             : headRange ? React.createElement("div", { style: { fontSize: 16, color: T.sub, marginTop: 2 } }, headRange)
             : bedsSel === null && l.priceLabel && l.priceHigh > l.price && React.createElement("div", { style: { fontSize: 16, color: T.sub, marginTop: 2 } }, l.priceLabel, priceUnit(l), " across floor plans"),
+        splitLine && React.createElement("div", { style: { fontSize: 15, color: T.faint, marginTop: 4 } }, splitLine),
         React.createElement("div", { style: { display: "grid", gap: 8, marginTop: 14 } },
             React.createElement("button", { className: "hk-btn", style: { ...S.primary, width: "100%" }, onClick: () => onInquiry(l, "info", unitSel) }, "Request info"),
             React.createElement("button", { className: "hk-btn", style: { ...S.ghost, width: "100%" }, onClick: () => onInquiry(l, "tour", unitSel) }, "Request a tour"),
@@ -1157,7 +1172,11 @@ function ListingDetail({ l, onClose, onInquiry, saved, onSave, userName, bedsWan
                                 React.createElement("div", { style: { fontWeight: 800, fontSize: 16, color: T.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, p.name),
                                 React.createElement("div", { style: { fontSize: 16, color: T.sub, marginTop: 2 } }, bedWord(p.beds), " · ", p.baths, " bath", p.sqft ? ` · ${p.sqft}` : ""),
                                 React.createElement("div", { style: { marginTop: 5 } }, React.createElement(Badge, { tone: st.tone === "faint" ? "blue" : st.tone }, st.label))),
-                            React.createElement("div", { style: { fontWeight: 800, fontSize: 16, color: st.off ? T.faint : T.maroon, whiteSpace: "nowrap", textDecoration: st.off ? "line-through" : "none" } }, p.priceLabel || (p.price ? `$${p.price}` : ""))));
+                            React.createElement("div", { style: { textAlign: "right", whiteSpace: "nowrap" } },
+                                React.createElement("div", { style: { fontWeight: 800, fontSize: 16, color: st.off ? T.faint : T.maroon, textDecoration: st.off ? "line-through" : "none" } },
+                                    p.priceLabel || (p.price ? usd(p.price) : ""),
+                                    p.price > 0 && React.createElement("span", { style: { fontWeight: 600, color: T.faint } }, priceUnit(l))),
+                                totalLabel(p) && React.createElement("div", { style: { fontSize: 14, color: T.faint, marginTop: 2 } }, totalLabel(p)))));
                     })),
                     bedsSel === null && shownPlans.length > 6 && React.createElement("div", { style: { fontSize: 16, color: T.faint, marginTop: 6 } }, `+${shownPlans.length - 6} more. Pick a bedroom count above.`),
                     (l.tours || []).filter((t) => bedsSel === null || t.beds === bedsSel).length > 0 && (React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 } }, (l.tours || []).filter((t) => bedsSel === null || t.beds === bedsSel).slice(0, 6).map((t, i) => (React.createElement("a", { key: i, href: t.url, target: "_blank", rel: "noopener", className: "hk-btn", style: { ...S.chip(false), color: T.maroon, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 5 } }, "3D tour", t.caption && t.caption !== "3D tour" ? ` \u00B7 ${t.caption}` : ""))))))),
@@ -1291,7 +1310,7 @@ function MapView({ listings, onOpen, height = 480 }) {
         const located = listings.filter(l => Number.isFinite(l.lat) && Number.isFinite(l.lng));
         located.forEach((l, index) => {
             const amount = l.mapPrice ?? l.price;
-            const price = Number.isFinite(amount) && amount > 0 ? `$${amount.toLocaleString()}${priceUnit(l)}` : "Ask for rent";
+            const price = Number.isFinite(amount) && amount > 0 ? usd(amount) : "Ask for rent";
             const showPrice = located.length <= priceLimit || index < priceLimit;
             const icon = L.divIcon({
                 className: "",
@@ -1655,7 +1674,7 @@ function Explore({ saved, toggleSave, compare, toggleCompare, openListing, start
     const pool = listings || LISTINGS;
     const { parsed: understood, status: searchStatus } = useAISearch(q);
     const effective = useMemo(() => HousingSearch.compile({ ...understood.spec,
-        maxPrice: f.max < 9999 ? Math.min(f.max, understood.spec.maxPrice ?? Infinity) : understood.spec.maxPrice,
+        maxPrice: f.max < 9999 && understood.spec.rentBasis !== "unit" ? Math.min(f.max, understood.spec.maxPrice ?? Infinity) : understood.spec.maxPrice,
         minBeds: f.beds > 0 ? Math.max(f.beds, understood.spec.minBeds ?? 0) : understood.spec.minBeds,
     }), [understood, f.max, f.beds]);
     const results = useMemo(() => {
@@ -1703,7 +1722,7 @@ function Explore({ saved, toggleSave, compare, toggleCompare, openListing, start
                     React.createElement("button", { className: "hk-btn", onClick: () => setFiltersOpen(false), "aria-label": "Close", style: { width: 28, height: 28, borderRadius: 99, background: T.stone, fontSize: 16 } }, "\u00D7")),
                 React.createElement("div", { className: "hk-filter-fields" },
                     [
-                        ["Maximum rent", "max", [[9999, "Any price"], ...[500, 600, 700, 800, 1000, 1200, 1500].map(p => [p, `Under $${p.toLocaleString()}`])]],
+                        ["Rent per person", "max", [[9999, "Any price"], ...[500, 600, 700, 800, 1000, 1200, 1500].map(p => [p, `Under $${p.toLocaleString()}`])]],
                         ["Bedrooms", "beds", [[0, "Any bedrooms"], ...[1, 2, 3, 4].map(n => [n, `${n}+ bedrooms`])]],
                         ["Student eligibility", "audience", [["", "All student eligibility"], ["undergrad", "Undergrad-friendly"], ["grad", "Grad students eligible"], ["faculty", "Faculty/staff eligible"], ["unknown", "Eligibility not stated"]]],
                     ].map(([label, key, options]) => React.createElement("label", { key }, label, React.createElement("select", { "aria-label": label, value: f[key], onChange: e => setF({ ...f, [key]: key === "audience" ? e.target.value : +e.target.value }) }, options.map(([value, text]) => React.createElement("option", { key: value, value }, text)))))),
@@ -1757,9 +1776,9 @@ function Explore({ saved, toggleSave, compare, toggleCompare, openListing, start
             React.createElement("div", { className: "hk-scroll", style: { overflowX: "auto" } },
                 React.createElement("table", { style: { borderCollapse: "collapse", width: "100%", minWidth: 560, fontSize: 16 } },
                     React.createElement("tbody", null, [["", (l) => React.createElement("b", { style: { color: T.ink } }, l.name)],
-                        ["Listed rent", (l) => React.createElement("b", { style: { color: T.maroon } },
-                                "$",
-                                l.price, priceUnit(l))],
+                        ["Rent per person", (l) => React.createElement("span", null,
+                                React.createElement("b", { style: { color: T.maroon } }, usd(l.price)),
+                                l.priceTotal ? React.createElement("div", { style: { fontSize: 14, color: T.faint } }, totalLabel(l)) : null)],
                         ["Walk to Burruss", (l) => `${l.walk} min`],
                         ["Beds / baths", (l) => `${l.beds} / ${l.baths}`],
                         ["Furnished", (l) => l.furnished ? "✓" : "No"],
@@ -2459,14 +2478,15 @@ function answerAbout(l, q) {
     const bedsM = s.match(/(\d)\s*[- ]?(?:bed|br|bd|x\d|person|people)/);
     const nb = bedsM ? +bedsM[1] : null;
     const money = (v) => `$${Number(v).toLocaleString()}`;
-    const planLine = (p) => `${p.name}: ${p.priceLabel || (p.price ? money(p.price) : "call")}${unit}, ${p.beds === 0 ? "studio" : p.beds + " bed"}/${p.baths} bath${p.sqft ? `, ${p.sqft}` : ""}${p.availability ? ` · ${p.availability}${p.availableDate ? " " + p.availableDate : ""}` : ""}`;
+    const planLine = (p) => `${p.name}: ${p.priceLabel || (p.price ? money(p.price) : "call")}${p.price ? unit : ""}${p.priceTotal ? ` (${totalLabel(p)})` : ""}, ${p.beds === 0 ? "studio" : p.beds + " bed"}/${p.baths} bath${p.sqft ? `, ${p.sqft}` : ""}${p.availability ? ` · ${p.availability}${p.availableDate ? " " + p.availableDate : ""}` : ""}`;
     const pool = nb !== null ? plans.filter((p) => p.beds === nb) : plans;
     if (has("price", "cost", "rent", "how much", "$", "cheap", "expensive", "per bed", "per month")) {
         if (pool.length) {
             const sorted = [...pool].sort((a, b) => (a.price || 9e9) - (b.price || 9e9));
             return `${nb !== null ? `${nb}-bed plans` : "Plans"} run ${money(sorted[0].price)}–${money(sorted[sorted.length - 1].priceHigh || sorted[sorted.length - 1].price)}${unit}. Cheapest: ${planLine(sorted[0])}.`;
         }
-        return `${l.priceLabel || money(l.price)}${unit}${l.perBed ? " (per bedroom)" : " for the whole unit"}.`;
+        const cp = cheapestPlan(plans) || l;
+        return `${l.priceLabel || money(l.price)}${unit}${cp.priceTotal ? `. The cheapest option is ${money(cp.priceTotal)}/mo for a whole ${cp.beds}-bed unit, split ${cp.beds} ways` : ""}.`;
     }
     if (has("available", "availab", "move in", "move-in", "when can", "open", "vacan", "still")) {
         if (!plans.length) return l.availability ? `Listed as "${l.availability}".` : "The listing doesn't say. Worth asking in a Request info.";

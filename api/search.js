@@ -11,8 +11,9 @@ maxBusWalk is walking minutes to a BT stop, not minutes riding a bus. Bus ride t
 noise/safety judgments, live availability, exact move-in dates, fees and unsupported destinations
 must go in unsupported as brief plain-English limitations; still apply the supported criteria.
 Rent and bedrooms must match the same floor plan. A requested bedroom number means exact
-bedrooms (minBeds=maxBeds); 'at least' means minimum only. Explicit per-person/per-bed budgets
-use rentBasis=bed; total/whole-unit budgets use unit. Otherwise leave rentBasis null.
+bedrooms (minBeds=maxBeds); 'at least' means minimum only. Catalog rent is per person, so
+plain budgets and per-person/per-bed budgets compare per person (rentBasis=bed if stated, else null).
+Budgets for the whole unit/house or total rent use rentBasis=unit.
 Pet friendly, furnished, utilities included, sublease and shared are booleans; handle negations.
 Use only the amenity enum, with excludeAmenities for negations. Unknown amenities go in unsupported.
 undergrad/grad/faculty requests use audience eligibility, not ratings or perceived personality.

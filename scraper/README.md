@@ -91,11 +91,11 @@ wherever the site is hosted. Only `--browser` mode needs a desktop.
 
 ## What the site shows per listing
 
-`name, type, price (+priceHigh, priceLabel, perBed), beds/bedsHigh, baths, sqft,
+`name, type, price (+priceHigh, priceLabel, priceTotal, priceBasis), beds/bedsHigh, baths, sqft,
 walk (est. min to Burruss), driveMin, busStop {name, walkMin, routes}, distanceMi,
 bus, lease, furnished, utilities, pets, audience {undergrad, grad, faculty}, rating,
 reviews (+reviewsList, from Apartments.com), area, address, lat/lng, photos[],
-photosByBeds {"4": [...]}, planPhotos {"4": path}, plans[] {name, beds, baths, price,
+photosByBeds {"4": [...]}, planPhotos {"4": path}, plans[] {name, beds, baths, basis, price, priceTotal,
 sqft, status, availableDate, image}, tours[] (Matterport), amenities[], desc,
 overview, pros[], cons[], sublet, shared, availability, manager, website, phone,
 email, sourceUrl, lastUpdated`
@@ -150,7 +150,11 @@ database rules, and email shared only on opt-in. Never enable anonymous write po
 - Photos have no captions on the portal, so "pool vs bedroom" isn't tagged. The first
   photo is whatever the landlord chose as their main photo. Filtering amenity shots
   would need an image classifier.
-- Per-bed vs whole-unit price is flagged (`perBed`) but price sorting mixes them.
+- Prices are per person. Each floor plan gets a `basis`: `bed` (quoted per bed), `room`
+  (a room in a shared unit) or `unit` (whole-apartment rent, divided by bedrooms, with
+  the quoted rent kept as `priceTotal`). The portal's per-bed flag is used when set, but
+  it's often missing, so `price_bases()` also reads the listing text and checks whether
+  bigger plans cost less than smaller ones. Couples sharing a bedroom aren't modeled.
 - `sublet: true` / `shared: true` listings (~45 / ~70) are in the catalog and badged
   in Explore; the Subleases and Roommates tabs still use the demo data.
 - Walk time is an estimate (straight-line × 1.3 at 20 min/mi); the portal's routed

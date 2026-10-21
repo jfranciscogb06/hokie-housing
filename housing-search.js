@@ -52,21 +52,26 @@
         return out;
     }
     const knownNumber = n => typeof n === "number" && Number.isFinite(n);
+    // Catalog prices are per person. A whole-unit budget is compared with the unit's total:
+    // the quoted rent when it was split, else per-person rent x bedrooms. A room in a
+    // shared unit has no whole-unit price.
+    const unitTotal = p => p.priceTotal || ((p.basis || p.priceBasis) === "room" || !(p.price > 0) ? null : p.price * Math.max(p.beds || 0, 1));
     function matchingPlans(l, s) {
         const plans = l.plans && l.plans.length ? l.plans : [l];
         return plans.filter(p => {
             if (s.minBeds !== null && (!knownNumber(p.beds) || p.beds < s.minBeds)) return false;
             if (s.maxBeds !== null && (!knownNumber(p.beds) || p.beds > s.maxBeds)) return false;
             if (s.minBaths !== null && (!knownNumber(p.baths) || p.baths < s.minBaths)) return false;
-            if ((s.minPrice !== null || s.maxPrice !== null) && (!knownNumber(p.price) || p.price <= 0)) return false;
-            return (s.minPrice === null || p.price >= s.minPrice) && (s.maxPrice === null || p.price <= s.maxPrice);
+            const rent = s.rentBasis === "unit" ? unitTotal(p) : p.price;
+            if ((s.minPrice !== null || s.maxPrice !== null || s.rentBasis === "unit") && (!knownNumber(rent) || rent <= 0)) return false;
+            return (s.minPrice === null || rent >= s.minPrice) && (s.maxPrice === null || rent <= s.maxPrice);
         });
     }
     function compile(value) {
         const s = validate(value), facets = [];
         if (s.minPrice !== null) facets.push(`rent ≥ $${s.minPrice}`);
         if (s.maxPrice !== null) facets.push(`rent ≤ $${s.maxPrice}`);
-        if (s.rentBasis) facets.push(s.rentBasis === "bed" ? "per-bed rent" : "whole-unit rent");
+        if (s.rentBasis) facets.push(s.rentBasis === "bed" ? "per person" : "whole-unit total");
         if (s.audience) facets.push(({ undergrad: "undergrad-friendly", grad: "grad students eligible", faculty: "faculty/staff eligible" })[s.audience]);
         if (s.minBeds !== null) facets.push(s.minBeds === s.maxBeds ? `${s.minBeds} bedrooms` : `${s.minBeds}+ bedrooms`);
         if (s.maxBeds !== null && s.maxBeds !== s.minBeds) facets.push(`up to ${s.maxBeds} bedrooms`);
@@ -88,14 +93,13 @@
             if (s.minRating !== null && (!l.reviews || !knownNumber(l.rating) || l.rating < s.minRating)) return false;
             if (s.maxLease !== null && (!knownNumber(l.lease) || l.lease <= 0 || l.lease > s.maxLease)) return false;
             if (s.type && (s.type === "Studio" ? !(l.beds === 0 || (l.plans || []).some(p => p.beds === 0)) : l.type !== s.type)) return false;
-            if (s.rentBasis && (typeof l.perBed !== "boolean" || l.perBed !== (s.rentBasis === "bed"))) return false;
             if (s.audience && l.eligibility?.[s.audience] !== true) return false;
             if (flags.some(k => s[k] !== null && l[k] !== s[k])) return false;
             const am = (l.amenities || []).join(" ");
             if (s.amenities.some(a => !amenities[a].test(am)) || s.excludeAmenities.some(a => amenities[a].test(am))) return false;
             // Check rent, beds and baths against the SAME floor plan, rather than a
             // community's cheapest studio plus its largest, more expensive plan.
-            const hasPlanCriteria = [s.minPrice, s.maxPrice, s.minBeds, s.maxBeds, s.minBaths].some(v => v !== null);
+            const hasPlanCriteria = [s.minPrice, s.maxPrice, s.minBeds, s.maxBeds, s.minBaths].some(v => v !== null) || s.rentBasis === "unit";
             if (!hasPlanCriteria) return true;
             return matchingPlans(l, s).length > 0;
         };
@@ -142,7 +146,8 @@
         take(/\b(?:under|below|less than|at most|no more than|up to|max(?:imum)?(?: budget)?|budget(?: of| is)?)\s*\$?\s*(\d{3,5})\b|\$\s*(\d{3,5})(?:\s*(?:or less|max))?\b/, m => s.maxPrice = +(m[1] || m[2]));
         take(/\b(?:over|above|at least|more than)\s*\$?\s*(\d{3,5})\b/, m => s.minPrice = +m[1]);
         take(/(?:\/|\bper |\ba )(?:bed|person|roommate)\b/, () => s.rentBasis = "bed");
-        take(/\b(?:whole unit|whole apartment|total rent|per unit)\b/, () => s.rentBasis = "unit");
+        take(/\b(?:whole unit|whole apartment|entire (?:unit|apartment)|whole place|entire place|total rent|in total|per unit)\b/, () => s.rentBasis = "unit");
+        take(/\b(?:whole|entire)(?= (?:house|home|townhouse|townhome)\b)/, () => s.rentBasis = "unit");
         take(/\b(?:at least|minimum|no fewer than)\s*(\d+)\s*(?:bed(?:room)?s?|br|bd)\b|\b(\d+)\s*\+\s*(?:bed(?:room)?s?|br|bd)\b/, m => s.minBeds = +(m[1] || m[2]));
         if (s.minBeds === null) take(/\b(?:exactly\s*)?(\d+)\s*(?:bed(?:room)?s?|br|bd)\b/, m => { s.minBeds = +m[1]; s.maxBeds = +m[1]; });
         take(/\b(\d+(?:\.\d+)?)\s*bath(?:room)?s?\b/, m => s.minBaths = +m[1]);
