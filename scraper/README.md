@@ -129,29 +129,14 @@ way is logged in the **Sent** tab (with "Email again").
 To add a landlord email by hand, add `"email": "leasing@example.com"` to that listing in
 `data/listings.js` — or keep an overrides file and merge it in `scrape.py`.
 
-## "I'm interested" (shared roommate-finding per listing)
+## Shared interested-student lists (staged)
 
-Students mark a listing and add a mini profile (year, major, budget, looking for
-roommates, one line); everyone viewing that listing sees who's interested and can
-message them. To share it across users, create a free Supabase project and run this
-in its SQL editor:
-
-```sql
-create table interests (
-  listing_id text not null, listing_name text, name text not null, email text not null,
-  year text, major text, budget text, roommates boolean default true, note text,
-  at timestamptz default now(), primary key (listing_id, email));
-alter table interests enable row level security;
-create policy "anyone can read"   on interests for select using (true);
-create policy "anyone can add"    on interests for insert with check (true);
-create policy "anyone can update" on interests for update using (true);
-create policy "anyone can remove" on interests for delete using (true);
-```
-
-Then paste the project URL and anon key into `BACKEND` in `index.html`. Until then the
-list is stored in each visitor's browser only (the page says so). Those open policies
-are fine for a launch; tighten them (e.g. email must match the signed-in user) once
-you have real auth.
+This feature is hidden in the public beta. It needs real authentication before
+profiles can be shared. Use authenticated user IDs for ownership, read policies
+limited to intended public profile fields, and insert/update/delete policies
+requiring `auth.uid() = user_id`. Never enable anonymous write/delete policies
+or use a typed email as proof of account ownership. Emails should not be exposed
+in a public table; use a consent-based contact flow.
 
 ## Known gaps / next steps
 

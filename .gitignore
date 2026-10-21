@@ -9,3 +9,10 @@ scraper/.venv/
 scraper/.chrome-profile*/
 scraper/__pycache__/
 .DS_Store
+.env
+.env.*
+!.env.example
+node_modules/
+
+# local aggregate sponsorship metrics
+.local/

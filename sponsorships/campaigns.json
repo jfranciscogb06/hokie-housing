@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "campaigns": [
+    {
+      "id": "hub-preview",
+      "listingId": "sbs6q75",
+      "advertiser": "Hub Blacksburg",
+      "status": "draft",
+      "startsAt": null,
+      "endsAt": null,
+      "coverPhoto": "photos/sbs6q75/662b61752a.jpg"
+    },
+    {
+      "id": "edge-preview",
+      "listingId": "2hm6lvb",
+      "advertiser": "The Edge Apartments and Townhomes",
+      "status": "draft",
+      "startsAt": null,
+      "endsAt": null,
+      "coverPhoto": "photos/2hm6lvb/300735bf90.jpg"
+    }
+  ]
+}

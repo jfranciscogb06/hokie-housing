@@ -1,0 +1,12 @@
+{
+  "name": "hokie-housing",
+  "private": true,
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.js",
+    "test": "node --test tests/*.test.js",
+    "sponsors": "node scripts/sponsors.js"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

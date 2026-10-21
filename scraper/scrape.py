@@ -30,6 +30,7 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from eligibility import resolve_audience
 
 from PIL import Image, ImageOps
 
@@ -294,6 +295,15 @@ def manifest_paths(manifest: dict, site_id: str, tag: str = "main") -> list[str]
     return ["photos/" + e["file"] for e in manifest.get(site_id, []) if e.get("tag", "main") == tag and (PHOTOS / e["file"]).exists()]
 
 
+def add_photo_fallbacks(rec: dict, entries: list[dict], sources: list[str], limit: int = 8):
+    """Match CDN fallbacks by local path, including bedroom shots and floor plans."""
+    fallbacks = {"photos/" + e["file"]: full_size_url(e["src"]) for e in entries if e.get("src")}
+    rec["photoFallbacks"] = fallbacks
+    if not rec["photos"]:
+        rec["photos"] = [full_size_url(src) for src in sources[:limit or 8]]
+    rec["photosRemote"] = [fallbacks.get(path, path if path.startswith("https://") else None) for path in rec["photos"]]
+
+
 # ---------------------------------------------------------------- app shape
 def _months(term: str | None) -> int:
     m = re.search(r"(\d+)\s*month", term or "", re.I)
@@ -376,6 +386,7 @@ def to_app(site_id: str, p: dict, d: dict | None, amenities: dict[str, str], pho
     bus = ", ".join(stop["routes"][:2]) if stop and stop["walkMin"] <= 12 else ("BT" if has("bus stop", "bus route", "shuttle") else "—")
     # who the landlord says the place is for ("Convenient For" on the portal)
     audience = {"undergrad": "Undergraduates" in names, "grad": "Graduate Students" in names, "faculty": "Faculty/Staff" in names} if any(x in names for x in ("Undergraduates", "Graduate Students", "Faculty/Staff")) else None
+    audience, audience_evidence = resolve_audience(d.get("longDescription") or d.get("shortDescription") or "", audience)
 
     extra = extra or {}
     photos_by_beds = {t[4:]: v for t, v in extra.items() if t.startswith("beds") and v}
@@ -413,6 +424,7 @@ def to_app(site_id: str, p: dict, d: dict | None, amenities: dict[str, str], pho
         "driveMin": drive,
         "busStop": stop,                  # {name, distMi, walkMin, routes} nearest campus-serving BT stop, or null
         "audience": audience,             # {undergrad, grad, faculty} booleans, or null if unstated
+        "audienceEvidence": audience_evidence,
         "distanceMi": round(dist, 2) if dist is not None else None,
         "bus": bus,
         "lease": _months(p.get("standardLeaseTerm") or d.get("standardLeaseTerm")),
@@ -659,8 +671,7 @@ def main():
                     extra = {tag: manifest_paths(manifest, sid, tag) for tag in groups}
                 rec = to_app(sid, p, d, amenities, photos, extra)
                 # original CDN URLs, so the site still shows photos when photos/ isn't present (e.g. a fresh git clone)
-                ents = [e for e in manifest.get(sid, []) if e.get("tag", "main") == "main"]
-                rec["photosRemote"] = [full_size_url(e["src"]) for e in ents if e.get("src")]
+                add_photo_fallbacks(rec, manifest.get(sid, []), srcs, args.photos)
                 listings.append(rec)
     except Blocked as e:
         log(f"BLOCKED: {e}. Try again in a few minutes, or run with --browser.")
