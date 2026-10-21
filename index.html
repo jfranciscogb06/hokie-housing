@@ -926,7 +926,7 @@ function InquiryModal({ l, kind, unit, user, onClose, onSent, onContact }) {
             React.createElement("textarea", { value: form.message, onChange: set("message"), rows: 4, maxLength: 2000, style: { ...inputStyle, resize: "vertical" } })),
         // Honeypot: hidden from people, filled by bots.
         React.createElement("input", { value: form.website, onChange: set("website"), tabIndex: -1, autoComplete: "off", "aria-hidden": true, style: { position: "absolute", left: -9999, width: 1, height: 1, opacity: 0 } }),
-        React.createElement("div", { style: { fontSize: 15, color: T.sub } }, "To ", React.createElement("b", { style: { color: T.ink } }, l.manager || l.name), ". Replies go to your VT email."),
+        React.createElement("div", { style: { fontSize: 15, color: T.sub } }, "To ", React.createElement("b", { style: { color: T.ink } }, l.manager || l.name), ". Replies go to your VT email. ", React.createElement("a", { href: "/privacy", target: "_blank", rel: "noopener", style: { color: T.sub } }, "Privacy")),
         error && React.createElement("div", { role: "alert", style: { fontSize: 15, color: T.orange, fontWeight: 700 } }, error),
         React.createElement("button", { type: "submit", className: "hk-btn", disabled: !valid || status === "sending", style: { ...S.primary, width: "100%", marginTop: 4, opacity: valid ? 1 : 0.55, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 } },
             React.createElement(Icon, { name: "mail", size: 16 }), status === "sending" ? "Sending…" : kind === "tour" ? "Send tour request" : "Send message"),
@@ -1426,6 +1426,73 @@ function Advertise({ listings, onBack }) {
             label("Note (optional)", React.createElement("textarea", { value: form.note, onChange: set("note"), rows: 3, style: { ...inp, resize: "vertical" } })),
             React.createElement("button", { type: "submit", className: "hk-btn", disabled: !valid, style: { ...S.primary, opacity: valid ? 1 : 0.55 } }, "Open request in Gmail"),
             React.createElement("p", { style: { fontSize: 14, color: T.faint, margin: 0, lineHeight: 1.5 } }, "We\u2019ll confirm pricing, dates and your cover photo by email before anything goes live. Nothing is charged here."))));
+}
+/* Privacy policy and terms. Written to match what the site actually does; review with
+   someone qualified before relying on them, and update LEGAL_UPDATED when they change. */
+const LEGAL_UPDATED = "October 21, 2026";
+const LEGAL_PATHS = { "/privacy": "privacy", "/terms": "terms" };
+function LegalPage({ kind, onBack }) {
+    const contact = CONTACT.inbox
+        ? React.createElement("a", { href: `mailto:${CONTACT.inbox}`, style: { color: T.maroon, fontWeight: 700 } }, CONTACT.inbox)
+        : "the contact email listed on this site";
+    const h = (t) => React.createElement("h2", { style: { fontSize: 20, fontWeight: 800, color: T.ink, margin: "28px 0 8px" } }, t);
+    const p = (...c) => React.createElement("p", { style: { fontSize: 16, lineHeight: 1.65, color: T.ink, margin: "0 0 10px" } }, ...c);
+    const li = (...c) => React.createElement("li", { style: { fontSize: 16, lineHeight: 1.6, color: T.ink, marginBottom: 6 } }, ...c);
+    const ul = (...items) => React.createElement("ul", { style: { margin: "0 0 10px", paddingLeft: 22 } }, ...items);
+    const privacy = [
+        p("Hokie Housing is an independent student project that helps people find off-campus housing near Virginia Tech. It is not affiliated with or endorsed by Virginia Tech. This policy explains what information the site handles and why."),
+        h("You can browse without an account"),
+        p("Searching, viewing listings, the map and saving places do not require you to sign in or give us any personal information. There are no ad trackers or analytics scripts on the site."),
+        h("Information stored on your device"),
+        p("Saved places, compare lists and your contact history are stored in your browser’s local storage on your device. We don’t receive them. Clearing your browser data removes them."),
+        h("When you message a property"),
+        p("If you use Request info or Request a tour, we ask for your name, your @vt.edu email, an optional phone number and your message. Depending on how the site is set up, either:"),
+        ul(li("we send your message to the property’s published leasing email on your behalf, with your email as the reply address, and email you a copy; or"),
+            li("we open a pre-filled draft in your own Gmail or mail app, and you choose whether to send it.")),
+        p("When we send it for you, the message passes through our email provider (Resend). We don’t keep a copy of your message on our servers, though our email provider keeps delivery records for a limited time. The property receives your name, email, any phone number you entered and your message, and their reply goes directly to you. How the property handles your information is up to them."),
+        p("If you choose Text or Call, your phone’s own messaging or calling app is used; nothing goes through us."),
+        h("Search"),
+        p("What you type in search is processed in your browser. If the optional AI search is turned on, the text of your search (nothing else about you) is sent to our server and to OpenAI to interpret it, and is not stored by OpenAI for training. Results are cached briefly in memory and then discarded."),
+        h("Accounts (if enabled)"),
+        p("Some shared features, like seeing which students are interested in a place, require signing in with a Virginia Tech Google account. We receive your name, VT email and a user ID from Google; we never see your password. If you add yourself to a listing’s interested list, the details you enter (name, year, major, budget, a note) are visible to other signed-in VT students. Your email is shown only if you choose to share it. You can remove yourself at any time, and deleting your account removes your entries. Account data is stored with our database provider (Supabase)."),
+        h("Third parties that load when you use the site"),
+        ul(li("Listing photos load from the image servers of the listing sources (such as Apartments.com and offcampusimages.com), which receive your IP address like any website image request."),
+            li("Map tiles load from OpenStreetMap and Esri."),
+            li("Page code loads from public code libraries (cdnjs and jsDelivr)."),
+            li("Links to property websites, Google Images and Gmail take you to those sites, which have their own policies.")),
+        h("Server logs and sponsorship counts"),
+        p("Our hosting provider keeps standard request logs (such as IP address and pages requested) for security and troubleshooting. For sponsored homepage placements we count total views and clicks per day, with no names, emails or addresses, and keep those counts for 90 days."),
+        h("Children"),
+        p("The site is intended for college students and other adults. It is not directed to children under 13, and we don’t knowingly collect their information."),
+        h("Changes and contact"),
+        p("If this policy changes, we’ll update the date below. Questions or requests to delete information: contact us at ", contact, "."),
+    ];
+    const terms = [
+        p("By using Hokie Housing you agree to these terms. If you don’t agree, please don’t use the site."),
+        h("What the site is"),
+        p("Hokie Housing is an independent student project, not affiliated with or endorsed by Virginia Tech. It gathers publicly available listing information to make housing near campus easier to search. We are not a landlord, broker or property manager, and we are not a party to any lease."),
+        h("Listing information may be wrong or out of date"),
+        p("Rent, availability, photos, fees, amenities, eligibility (for example, whether undergraduates may rent) and commute times come from third-party sources or are estimates. They can be inaccurate or change at any time. Always confirm details directly with the property before you apply, sign or pay anything. Overviews, pros and cons, and answers from the housing assistant are generated automatically from listing data and are not advice."),
+        h("Your messages to properties"),
+        p("When you contact a property through the site, you’re responsible for what you send. Use your real name and your own VT email, and don’t send spam, harassment or anything unlawful. We may limit or block use of messaging to prevent abuse."),
+        h("Be careful with money"),
+        p("Never send a deposit, rent or personal financial information to someone you haven’t verified. Be wary of listings that seem too good to be true, ask for payment by gift card or wire, or won’t let you see the unit. We don’t process payments for housing and can’t recover money lost to fraud."),
+        h("Sponsored placements"),
+        p("Some homepage placements are paid for by property managers and are labeled Sponsored. Sponsorship doesn’t change search results. A sponsored placement isn’t an endorsement."),
+        h("Accounts and shared features"),
+        p("If accounts are enabled, you must use your own Virginia Tech account. Information you share with other students (like an interested-list entry) should be accurate and respectful; we may remove entries that aren’t."),
+        h("Content and trademarks"),
+        p("Listing text and photos belong to their respective owners. If you own content on this site and want it corrected or removed, contact us at ", contact, " and we’ll respond promptly. Virginia Tech names and marks belong to Virginia Tech."),
+        h("No warranty; limitation of liability"),
+        p("The site is provided “as is,” without warranties of any kind. To the extent the law allows, Hokie Housing and its creators aren’t liable for any loss arising from your use of the site, including decisions made based on listing information or dealings with landlords or other users."),
+        h("Changes"),
+        p("We may update these terms; the date below shows the latest version. Continuing to use the site means you accept the updated terms."),
+    ];
+    return React.createElement("article", { style: { maxWidth: 760, margin: "0 auto", padding: "8px 0 48px" } },
+        React.createElement("button", { className: "hk-btn", onClick: onBack, style: { ...S.ghost, padding: "8px 14px", fontSize: 15, marginBottom: 16, display: "inline-flex", alignItems: "center", gap: 6 } }, React.createElement(Icon, { name: "back", size: 15 }), "Back"),
+        React.createElement("h1", { style: { ...S.h2, fontSize: 30 } }, kind === "privacy" ? "Privacy policy" : "Terms of use"),
+        React.createElement("p", { style: { fontSize: 15, color: T.faint, margin: "6px 0 20px" } }, "Last updated ", LEGAL_UPDATED),
+        ...(kind === "privacy" ? privacy : terms));
 }
 function Landing({ onExplore }) {
     const ref = useRef(null);
@@ -2765,7 +2832,17 @@ function HokieHousing() {
     const [role, setRole] = useState((user === null || user === void 0 ? void 0 : user.role) || "Student");
     useEffect(() => { if (user)
         setRole(user.role || "Student"); }, [user === null || user === void 0 ? void 0 : user.email]);
-    const [tab, setTab] = useState(user?.role === "Landlord" ? "explore" : "home");
+    const [tab, setTab] = useState(() => LEGAL_PATHS[location.pathname] || (user?.role === "Landlord" ? "explore" : "home"));
+    // /privacy and /terms are real addresses (sign-in providers link to them); other views stay at /.
+    useEffect(() => {
+        const path = Object.keys(LEGAL_PATHS).find((k) => LEGAL_PATHS[k] === tab) || "/";
+        if (location.pathname !== path) history.pushState(null, "", path + location.search);
+    }, [tab]);
+    useEffect(() => {
+        const back = () => setTab(LEGAL_PATHS[location.pathname] || "home");
+        window.addEventListener("popstate", back);
+        return () => window.removeEventListener("popstate", back);
+    }, []);
     const [menuOpen, setMenuOpen] = useState(false);
     useEffect(() => {
         if (!window.matchMedia) return;
@@ -2967,14 +3044,15 @@ function HokieHousing() {
             tab === "saved" && React.createElement(Saved, { saved: saved, toggleSave: toggleSave, compare: compare, toggleCompare: toggleCompare, openListing: setDetail, listings: allListings }),
             tab === "messages" && React.createElement(ContactHistory, { sent: sent, onOpenListing: (id) => { const l = allListings.find((x) => x.id === id); if (l) openListing(l); else notify("That listing isn\u2019t in the catalog anymore"); }, onRemove: (id) => setSent((xs) => xs.filter((m) => m.id !== id)) }),
             tab === "admin" && role === "Admin" && React.createElement(Admin, null),
-            tab === "advertise" && React.createElement(Advertise, { listings: allListings, onBack: () => { setTab("home"); window.scrollTo(0, 0); } })),
+            tab === "advertise" && CONTACT.inbox && React.createElement(Advertise, { listings: allListings, onBack: () => { setTab("home"); window.scrollTo(0, 0); } }),
+            (tab === "privacy" || tab === "terms") && React.createElement(LegalPage, { kind: tab, onBack: () => { setTab("home"); window.scrollTo(0, 0); } })),
         React.createElement("footer", { style: { display: !detail && tab === "explore" && role !== "Landlord" ? "none" : undefined, borderTop: `1px solid ${T.line}`, marginTop: 8 } },
             React.createElement("div", { style: { maxWidth: 1400, margin: "0 auto", padding: "22px 96px 34px 18px", display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 14 } },
                 React.createElement("div", { style: { fontSize: 16, color: T.faint, lineHeight: 1.7, maxWidth: 640 } },
                     React.createElement("b", { style: { color: T.sub } }, "Hokie Housing"),
                     " is an independent student project, not affiliated with Virginia Tech. Confirm price and availability with the property."),
-                React.createElement("div", { style: { fontSize: 16, color: T.faint, display: "flex", gap: 16, alignItems: "center" } },
-                    React.createElement("button", { className: "hk-btn", onClick: () => { setTab("advertise"); setDetail(null); window.scrollTo(0, 0); }, style: { background: "transparent", color: T.sub, fontWeight: 700, fontSize: 16, padding: 0, textDecoration: "underline" } }, "For property managers"),
+                React.createElement("nav", { "aria-label": "Site information", style: { fontSize: 16, color: T.faint, display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" } },
+                    [["privacy", "Privacy"], ["terms", "Terms"], ...(CONTACT.inbox ? [["advertise", "For property managers"]] : [])].map(([k, label]) => React.createElement("button", { key: k, className: "hk-btn", onClick: () => { setTab(k); setDetail(null); window.scrollTo(0, 0); }, style: { background: "transparent", color: T.sub, fontWeight: 700, fontSize: 16, padding: 0, minHeight: 0, textDecoration: "underline" } }, label)),
                     "Blacksburg, VA"))),
         inquiry && React.createElement(InquiryModal, { l: inquiry.l, kind: inquiry.kind, unit: inquiry.unit, user: user, onContact: recordContact, onClose: () => setInquiry(null), onSent: (body, note, extra) => recordInquiry(inquiry.l, inquiry.kind, body, note, extra) }),
         role !== "Landlord" && React.createElement(AIAssistant, { open: aiOpen, setOpen: setAiOpen, openListing: openListing, goToSublease: goToSublease, prefill: aiPrefill, onPrefillUsed: () => setAiPrefill("") }),

@@ -117,13 +117,24 @@ their CDN copies.
 
 ## Config (in `index.html`)
 
-- `CONTACT.inbox` — optional catch-all for Request info when a listing has no known email.
+- `CONTACT.inbox` — your contact email. Shown on the Privacy and Terms pages, receives
+  Advertise requests, and switches on the "For property managers" page (hidden while blank).
+  **Set this before launch.**
 - Messaging: `data/contacts.json` holds verified leasing emails; set `RESEND_API_KEY` and
   `MAIL_FROM` on the server to send directly (see "Messaging properties" in scraper/README.md).
 - `BACKEND` — Supabase URL + anon key: VT Google sign-in and shared "I'm interested"
   lists. Setup and database rules: [backend/README.md](backend/README.md).
 - `SPONSOR_OFFER` — homepage sponsorship slots, terms and (optional) price shown on the
   "For property managers" page.
+
+## Before launch
+
+- Set `CONTACT.inbox` (see Config).
+- Review `/privacy` and `/terms` (in `index.html`, `LegalPage`) with someone qualified; update
+  `LEGAL_UPDATED` whenever they change. Google sign-in needs the `/privacy` URL.
+- Data rights: listings, photos and reviews come from offcampus.vt.edu (CoStar/Apartments.com).
+  Get permission (VT Off-Campus Housing, CoStar, or the management companies) before a public
+  launch, and especially before selling sponsored placements.
 
 ## Layout
 
