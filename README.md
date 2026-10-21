@@ -94,16 +94,34 @@ it works on a fresh clone. To get local copies: `./scraper/run.sh --details none
 
 ## Refresh the listings
 
-```bash
-./scraper/run.sh          # ~3 min: re-crawls the portal, fetches what changed, commits nothing
-```
+On demand only — nothing runs on a schedule.
+
+- **From GitHub (no laptop needed):** Actions tab > **Refresh listings** > Run workflow.
+  It re-crawls the portal, runs the tests, and commits `data/listings.*` if anything
+  changed. A host that deploys from `main` picks it up automatically. Photos are served
+  from the original CDN in this mode.
+- **Locally:** `./scraper/run.sh` (also downloads photos to `photos/`).
 
 See [scraper/README.md](scraper/README.md) for how it works and the options.
+
+## Deploy (Render)
+
+1. render.com > New > Blueprint > pick this repo. `render.yaml` defines one Node web
+   service plus a 1GB disk for sponsorship metrics.
+2. In the service's Environment tab, set `OPENAI_API_KEY` (optional; built-in search
+   works without it).
+3. Add your domain under Settings > Custom Domains and point DNS at it.
+
+The host doesn't need the 800MB `photos/` folder: missing local photos redirect to
+their CDN copies.
 
 ## Config (in `index.html`)
 
 - `CONTACT.inbox` — where "Request info" emails go when a listing has no email.
-- `BACKEND` — Supabase URL + anon key to share "I'm interested" across users (optional).
+- `BACKEND` — Supabase URL + anon key: VT Google sign-in and shared "I'm interested"
+  lists. Setup and database rules: [backend/README.md](backend/README.md).
+- `SPONSOR_OFFER` — homepage sponsorship slots, terms and (optional) price shown on the
+  "For property managers" page.
 
 ## Layout
 
@@ -111,6 +129,10 @@ See [scraper/README.md](scraper/README.md) for how it works and the options.
 index.html        the app UI
 housing-search.js shared search schema, filters, and built-in parser
 eligibility.js    description-based student restriction rules
+catalog.js        load-time cleanup: address titles, grouped sublets, photos first
+backend/          Supabase schema + setup for accounts and shared interest lists
+render.yaml       Render deployment
+.github/workflows on-demand catalog refresh
 api/search.js     server-side AI interpretation
 server.js         local app/API server
 data/listings.js  the catalog (generated)
