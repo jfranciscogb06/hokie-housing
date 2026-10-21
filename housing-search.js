@@ -164,7 +164,7 @@
         take(/\b(?:best|top|highest)(?: rated)?\b/, () => s.sort = "rating");
         take(/\b(?:rated|rating(?: of)?)\s*(\d(?:\.\d+)?)\s*(?:\+|or (?:more|higher)|stars?)?/, m => s.minRating = +m[1]);
         take(/\b(\d+)\s*months?(?:\s*lease)?\b/, m => s.maxLease = +m[1]);
-        if (s.maxWalk === null && s.maxDrive === null) take(/\b(?:near|close to|walkable to|walking distance (?:from|to))\s*(?:the )?(?:campus|vt|school|burruss)\b/, () => s.maxWalk = 25);
+        if (s.maxWalk === null && s.maxDrive === null) take(/\b(?:near|close to|walkable to|walking distance (?:from|to)|(?:a |short )?walk(?:ing)?(?: distance)? (?:to|from))\s*(?:the )?(?:campus|vt|school|burruss|class(?:es)?)\b/, () => s.maxWalk = 25);
         take(/\b(?:on (?:a |the )?)?(?:bus|bt)(?: route| stop)?\b/, () => { if (s.maxBusWalk === null) s.maxBusWalk = 8; });
         take(/\b(?:quiet|safe|safest|crime|noise|bike|biking|available now|move in|august|september)\b/, m => s.unsupported.push(`“${m[0].trim()}” needs more information than the catalog provides.`));
         rest = rest.replace(/\b(?:find|show|get|give|search|looking|look|for|me|us|i|im|id|like|want|need|a|an|the|some|any|with|and|in|that|is|are|please|place|places|listing|listings|rental|rentals|to|rent|vt|virginia tech|campus|school|from|away|within|only|minutes|minute|per|month|monthly|mo|can|you|do|have|something)\b/g, " ");

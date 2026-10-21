@@ -923,8 +923,14 @@ function ListingDetail({ l, onClose, onInquiry, saved, onSave, userName, bedsWan
     };
     const orderedPlans = [...plans].sort((a, b) => (planStatus(a).off ? 1 : 0) - (planStatus(b).off ? 1 : 0));
     const shownPlans = orderedPlans.filter((p) => bedsSel === null || p.beds === bedsSel);
-    // header price: the selected plan's, else the listing's range
-    const headPrice = plan ? (plan.priceLabel || (plan.price ? `$${plan.price}` : "")) : `$${l.price}`;
+    // header price: the selected plan's; else the cheapest plan with the selected bed
+    // count (matches what the search card showed); else the listing's lowest rent.
+    const bedPrices = bedsSel !== null ? plans.filter((p) => p.beds === bedsSel && p.price > 0).map((p) => p.price) : [];
+    const money = (v) => `$${Number(v).toLocaleString()}`;
+    const headPrice = plan ? (plan.priceLabel || (plan.price ? money(plan.price) : ""))
+        : bedPrices.length ? money(Math.min(...bedPrices)) : money(l.price);
+    const headRange = !plan && bedPrices.length > 1 && Math.max(...bedPrices) > Math.min(...bedPrices)
+        ? `${money(Math.min(...bedPrices))} - ${money(Math.max(...bedPrices))}${priceUnit(l)} for ${bedWord(bedsSel).toLowerCase()} plans` : null;
     // what the student is asking about, for the Request info email
     const unitSel = plan
         ? { label: `${plan.name} (${bedWord(plan.beds)} / ${plan.baths} bath${plan.sqft ? `, ${plan.sqft}` : ""}${plan.priceLabel ? `, ${plan.priceLabel}${priceUnit(l)}` : ""})`, beds: plan.beds }
@@ -950,7 +956,8 @@ function ListingDetail({ l, onClose, onInquiry, saved, onSave, userName, bedsWan
             headPrice,
             React.createElement("span", { style: { fontSize: 16, color: T.faint, fontWeight: 600 } }, priceUnit(l))),
         plan ? React.createElement("div", { style: { fontSize: 16, color: T.sub, marginTop: 2 } }, plan.name, " \u00B7 ", bedWord(plan.beds), " / ", plan.baths, " bath", plan.sqft ? ` \u00B7 ${plan.sqft}` : "")
-            : l.priceLabel && l.priceHigh > l.price && React.createElement("div", { style: { fontSize: 16, color: T.sub, marginTop: 2 } }, l.priceLabel, priceUnit(l), " across floor plans"),
+            : headRange ? React.createElement("div", { style: { fontSize: 16, color: T.sub, marginTop: 2 } }, headRange)
+            : bedsSel === null && l.priceLabel && l.priceHigh > l.price && React.createElement("div", { style: { fontSize: 16, color: T.sub, marginTop: 2 } }, l.priceLabel, priceUnit(l), " across floor plans"),
         React.createElement("div", { style: { display: "grid", gap: 8, marginTop: 14 } },
             React.createElement("button", { className: "hk-btn", style: { ...S.primary, width: "100%" }, onClick: () => onInquiry(l, "info", unitSel) }, "Request info"),
             React.createElement("button", { className: "hk-btn", style: { ...S.ghost, width: "100%" }, onClick: () => onInquiry(l, "tour", unitSel) }, "Request a tour"),

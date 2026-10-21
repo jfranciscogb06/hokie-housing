@@ -111,3 +111,12 @@ test("entire app parses and runs with the shared modules", () => {
     assert(!vm.runInContext("answerAI('talk to a human').escalate", ctx));
     assert.equal(vm.runInContext("answerAI('hub under $500').picks.length", ctx), 0);
 });
+test("'walk to campus' phrasing is a commute filter, never leftover name text", () => {
+    for (const q of ["walk to campus", "walking to campus", "short walk to class", "walk to school", "4 bed under 1200 per bed walk to campus"]) {
+        const p = Search.local(q);
+        assert.equal(p.spec.maxWalk, 25, q);
+        assert.equal(p.text, "", q);
+    }
+    const p = Search.local("4 bed under 1200 per bed walk to campus");
+    assert(listings.filter(l => p.filter(l) && Search.matchesText(l, p.text)).length > 0);
+});
