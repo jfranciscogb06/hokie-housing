@@ -18,6 +18,10 @@ services:
         sync: false          # set in the Render dashboard; optional (built-in search works without it)
       - key: OPENAI_SEARCH_MODEL
         value: gpt-4o-mini
+      - key: RESEND_API_KEY
+        sync: false          # direct messages to properties; optional (falls back to Gmail drafts)
+      - key: MAIL_FROM
+        sync: false          # e.g. "Hokie Housing <messages@hokiehousing.com>" on a domain verified in Resend
     disk:
       name: hokie-data
       mountPath: /var/data

@@ -1,6 +1,7 @@
 // Local app + same-origin AI endpoint. Node 22+, no installed dependencies.
 const http = require("node:http"), fs = require("node:fs"), path = require("node:path");
 const search = require("./api/search.js");
+const message = require("./api/message.js");
 const root = __dirname;
 // DATA_DIR: writable, persistent location for sponsorship metrics on a host (e.g. a Render disk).
 const dataDir = process.env.DATA_DIR || path.join(root, ".local");
@@ -27,6 +28,7 @@ http.createServer(async (req, res) => {
     let name;
     try { name = decodeURIComponent(new URL(req.url, "http://localhost").pathname); } catch { res.writeHead(400); return res.end(); }
     if (name === "/api/search") return search(req, res);
+    if (name === "/api/message") return message(req, res);
     if (["/api/sponsors", "/api/sponsors/event"].includes(name)) return sponsors(req, res);
     // Serve only public assets, not environment files, source tooling or git.
     if (name === "/") name = "/index.html";

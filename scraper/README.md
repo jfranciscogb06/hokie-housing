@@ -114,20 +114,31 @@ rent/bedrooms under $450 → per bed; or a bigger plan priced at or below a smal
 reviews, amenities, price vs. the median for that bed count, availability, audience).
 No LLM is called; to swap in a model, generate them in `build_overview()` and cache.
 
-## "Request info" emails (sent from the student's Gmail)
+## Messaging properties (Request info / Request a tour)
 
-Listing pages have **Request info** / **Request a tour**. The site builds the email
-(prefilled with the listing, the selected floor plan, move-in, the student's name) and
-opens a **Gmail compose window** in a new tab; the student hits send from their own
-account. No mail service, no API keys. "Use another mail app" falls back to `mailto:`.
+Students message a property from its page. Three paths, chosen automatically:
 
-Recipient: the listing's own `email` if the scraper found one (rare — the portal hides
-landlord emails), otherwise `CONTACT.inbox` in `index.html` — set that to your inbox and
-forward. The landlord's phone/website is in the body either way. Every email opened this
-way is logged in the **Sent** tab (with "Email again").
+1. **Sent directly** (when `RESEND_API_KEY` and `MAIL_FROM` are set on the server):
+   `POST /api/message` emails the property from Hokie Housing with **Reply-To set to the
+   student**, so the property's reply goes straight to the student's VT inbox. The student
+   gets a copy. Requires an @vt.edu address; rate-limited per student, per IP and per day;
+   has a honeypot for bots. The recipient is looked up on the server, never sent by the
+   browser, so the endpoint can't be used to email arbitrary addresses.
+2. **Gmail draft** (no mail settings, or the mail service fails): the same message opens in
+   Gmail addressed to the same verified recipient; the student hits send.
+3. **Text / Call** (property has no published email): Text opens the phone's messages app
+   with the message prefilled.
 
-To add a landlord email by hand, add `"email": "leasing@example.com"` to that listing in
-`data/listings.js` — or keep an overrides file and merge it in `scrape.py`.
+Recipients come from `data/contacts.json`: public leasing emails from each management
+company's or property's own website, keyed by the manager name on the portal. It covers
+242 of 435 listings (Townside, River Mountain, Price, Roost, Core Spaces/Hub, Brexx,
+Pointe West/Granite, Roanoke Street, Dogwood/Turner NW). The rest are mostly individual
+owners who only list a phone. To add one: find the address on their site, add
+`"Manager name": { "email": ..., "source": ... }`. Remove any that bounce or object.
+
+**Turning on direct sending:** create a Resend account (free tier: 3,000 emails/month),
+verify your domain's DNS records there, then set on the host:
+`RESEND_API_KEY=re_...` and `MAIL_FROM=Hokie Housing <messages@your-domain>`.
 
 ## Shared interested-student lists
 

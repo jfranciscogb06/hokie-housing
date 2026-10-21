@@ -1,0 +1,19 @@
+{
+  "note": "Public leasing/contact emails, taken from each company's or property's own website. Used to deliver Request info messages. Re-verify before relying on one; remove any that bounce or object.",
+  "checked": "2026-10-21",
+  "managers": {
+    "Townside Property Management":       { "email": "rentals@townside.com",                  "source": "https://www.townside.com/" },
+    "Townside Property Management, Inc.": { "email": "rentals@townside.com",                  "source": "https://www.townside.com/" },
+    "River Mountain Properties, LLC":     { "email": "info@rivermountainproperties.com",      "source": "https://www.rivermountainproperties.com/" },
+    "Price Real Estate":                  { "email": "questions@pricemanagement.com",         "source": "https://www.pricemanagement.com/" },
+    "Price Real Estate Inc":              { "email": "questions@pricemanagement.com",         "source": "https://www.pricemanagement.com/" },
+    "Roost Real Estate Group":            { "email": "info@roostrealestategroup.com",         "source": "https://www.roostrealestategroup.com/" },
+    "Granite Student Living":             { "email": "info@pointewestmanagement.com",         "source": "https://www.havenblacksburg.com/" },
+    "Pointe West Management - Blacksburg":{ "email": "info@pointewestmanagement.com",         "source": "https://www.havenblacksburg.com/" },
+    "Haven Management Group":             { "email": "info@pointewestmanagement.com",         "source": "https://www.havenblacksburg.com/" },
+    "University Partners":                { "email": "info@brexxblacksburg.com",              "source": "https://www.brexxblacksburg.com/" },
+    "Core Spaces":                        { "email": "liveblacksburg@corespaces.com",         "source": "https://huboncampus.com/blacksburg/" },
+    "Roanoke Street Apartments":          { "email": "vtechhousing@roanokestreetapartments.com", "source": "http://www.roanokestreetapartments.com/" },
+    "Dogwood Residential":                { "email": "info@livedw.com",                       "source": "http://www.liveturnernw.com/" }
+  }
+}

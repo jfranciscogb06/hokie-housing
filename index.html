@@ -831,75 +831,118 @@ function ListingCard({ l, saved, onSave, compared, onCompare, onOpen, bedsWanted
 }
 /* Prefilled Gmail compose for property inquiries. Records draft opening, not
    delivery. Properties without a listed email offer phone or website contacts. */
+/* Verified property contact emails (data/contacts.json), loaded once. */
+let contactDirPromise = null;
+const contactDirectory = () => contactDirPromise ||= fetch("data/contacts.json").then((r) => r.ok ? r.json() : { managers: {} }).catch(() => ({ managers: {} }));
+function useRecipient(l) {
+    const [to, setTo] = useState(l.email || null);
+    const [ready, setReady] = useState(!!l.email);
+    useEffect(() => {
+        if (l.email) return;
+        let alive = true;
+        contactDirectory().then((d) => { if (!alive) return; setTo(d.managers?.[l.manager]?.email || CONTACT.inbox || null); setReady(true); });
+        return () => { alive = false; };
+    }, [l.id]);
+    return { to, ready };
+}
+const telHref = (phone) => `tel:${phone.replace(/[^\d+]/g, "")}`;
+const smsHref = (phone, body) => `sms:${phone.replace(/[^\d+]/g, "")}?&body=${encodeURIComponent(body)}`;
+/* Request info / tour. Sends directly through /api/message (Reply-To = the student)
+   when the server has mail set up; otherwise opens a Gmail draft to the same verified
+   address. Properties with no published email get Text / Call / website instead. */
 function InquiryModal({ l, kind, unit, user, onClose, onSent, onContact }) {
-    const to = l.email || CONTACT.inbox;
+    const { to, ready } = useRecipient(l);
     const what = unit ? `${unit.label} at ${l.name}` : l.name;
     const [form, setForm] = useState({
-        name: user.name || "", phone: "", moveIn: "", tourWhen: "",
+        name: user.name || "", email: isVtEmail(user.email) ? user.email : "", phone: "", moveIn: "", tourWhen: "", website: "",
         message: kind === "tour"
             ? `Hi! I'd like to schedule a tour of ${what}${l.address ? ` (${l.address})` : ""}. When are you available?`
             : `Hi! I'm a Virginia Tech student interested in ${what}${l.address ? `, ${l.address}` : ""}. Is it still available${unit ? "" : l.price ? ` at $${l.price}${priceUnit(l)}` : ""}? Thanks!`,
     });
-    const [status, setStatus] = useState("idle"); // idle | sent
+    const [status, setStatus] = useState("idle"); // idle | sending | sent | draft
+    const [error, setError] = useState("");
+    const [sentTo, setSentTo] = useState("");
     const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
-    const valid = form.name.trim().length > 1 && form.message.trim().length > 5;
-    const subject = `${kind === "tour" ? "Tour request" : "Inquiry"}: ${l.name}${unit ? ` \u2014 ${unit.label}` : ""}`;
+    const emailOk = /^[^\s@]+@vt\.edu$/i.test(form.email.trim());
+    const valid = form.name.trim().length > 1 && emailOk && form.message.trim().length >= 10;
+    const subject = `${kind === "tour" ? "Tour request" : "Inquiry"}: ${l.name}${unit ? ` — ${unit.label}` : ""}`;
     const body = [form.message.trim(), "",
         form.tourWhen ? `Preferred tour time: ${form.tourWhen}` : null,
         form.moveIn ? `Move-in: ${form.moveIn}` : null,
-        `\u2014 ${form.name.trim()}${form.phone ? ` \u00B7 ${form.phone}` : ""}`,
-        "", `Listing: ${l.name}${l.address ? `, ${l.address}` : ""}`,
-        unit ? `Unit type: ${unit.label}` : null,
-        l.phone || l.website ? `Landlord contact: ${[l.phone, l.website].filter(Boolean).join(" \u00B7 ")}` : null,
+        unit ? `Unit: ${unit.label}` : null,
+        `— ${form.name.trim()}${form.email ? ` · ${form.email.trim()}` : ""}${form.phone ? ` · ${form.phone}` : ""}`,
+        `Listing: ${l.name}${l.address ? `, ${l.address}` : ""}`,
     ].filter((x) => x !== null).join("\n");
-    const send = (via) => {
-        if (!valid || !to)
-            return;
-        if (via === "gmail")
-            window.open(gmailCompose(to, subject, body), "_blank", "noopener");
-        else
-            window.location.href = mailtoLink(to, subject, body);
-        setStatus("sent");
-        onSent(body, via === "gmail" ? "Opened in Gmail" : "Opened in your mail app", { to, subject, unit: unit ? unit.label : null, via: via === "gmail" ? "Gmail" : "mail app" });
+    const draft = (recipient) => {
+        window.open(gmailCompose(recipient, subject, body), "_blank", "noopener");
+        setStatus("draft");
+        onSent(body, "Opened in Gmail", { to: recipient, subject, unit: unit ? unit.label : null, via: "Gmail draft" });
     };
+    const submit = async (e) => {
+        e.preventDefault();
+        if (!valid || status === "sending") return;
+        setStatus("sending"); setError("");
+        let r, data = {};
+        try {
+            r = await fetch("/api/message", { method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ listingId: l.id, kind, unit: unit ? unit.label : "", name: form.name, email: form.email, phone: form.phone, moveIn: form.moveIn, tourWhen: form.tourWhen, message: form.message, website: form.website }) });
+            data = await r.json().catch(() => ({}));
+        } catch { r = null; }
+        if (r && r.ok && data.sent) {
+            setSentTo(data.toName || l.manager || l.name); setStatus("sent");
+            onSent(body, "Sent", { to, subject, unit: unit ? unit.label : null, via: "Sent by Hokie Housing" });
+            return;
+        }
+        // Server can't send (not set up, or the mail service failed): same message as a Gmail draft.
+        if (!r || data.code === "not_configured" || data.code === "send_failed") { draft(data.to || to); return; }
+        setStatus("idle"); setError(data.error || "Couldn’t send that. Try again.");
+    };
+    const inputStyle = { padding: "10px 12px", borderRadius: 10, border: `1.5px solid ${T.line}`, fontSize: 16, fontFamily: "inherit", fontWeight: 500, color: T.ink, boxSizing: "border-box", width: "100%" };
     const field = (label, k, extra = {}) => (React.createElement("label", { style: { display: "grid", gap: 4, fontSize: 16, fontWeight: 700, color: T.sub } },
         label,
-        React.createElement("input", { value: form[k], onChange: set(k), ...extra, style: { padding: "10px 12px", borderRadius: 10, border: `1.5px solid ${T.line}`, fontSize: 16, fontFamily: "inherit", fontWeight: 500, color: T.ink, boxSizing: "border-box", width: "100%" } })));
-    if (!to)
-        return React.createElement("div", { role: "dialog", "aria-modal": true, "aria-label": "Contact property", onClick: onClose, style: { position: "fixed", inset: 0, background: "rgba(36,27,31,.5)", zIndex: 90, display: "grid", placeItems: "center", padding: 16 } },
-            React.createElement("div", { onClick: (e) => e.stopPropagation(), style: { ...S.card, width: "min(440px, 100%)", padding: 22, boxSizing: "border-box" } },
-                React.createElement("h2", { style: S.h2 }, "Contact property"),
-                React.createElement("p", { style: { ...S.sub, lineHeight: 1.6 } }, `No email address is listed for ${l.name}. Use the property's contact options to ask about availability or a tour.`),
-                React.createElement("div", { style: { display: "grid", gap: 10, marginTop: 16 } },
-                    l.phone && React.createElement("a", { href: `tel:${l.phone.replace(/[^\d+]/g, "")}`, onClick: () => onContact(l, "phone", `tel:${l.phone.replace(/[^\d+]/g, "")}`, unit), style: { ...S.ghost, textAlign: "center", textDecoration: "none" } }, `Call ${l.phone}`),
-                    (l.website || l.sourceUrl) && React.createElement("a", { href: l.website || l.sourceUrl, target: "_blank", rel: "noopener noreferrer", onClick: () => onContact(l, "website", l.website || l.sourceUrl, unit), style: { ...S.primary, textAlign: "center", textDecoration: "none" } }, l.website ? "Open property website" : "Contact on original listing"),
-                    l.website && l.sourceUrl && React.createElement("a", { href: l.sourceUrl, target: "_blank", rel: "noopener noreferrer", onClick: () => onContact(l, "website", l.sourceUrl, unit), style: { color: T.maroon, textAlign: "center", fontSize: 16 } }, "View original listing"),
-                    React.createElement("button", { className: "hk-btn", onClick: onClose, style: S.ghost }, "Close"))));
-    return (React.createElement("div", { className: "hk-fade", onClick: onClose, style: { position: "fixed", inset: 0, background: "rgba(36,27,31,.5)", zIndex: 90, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 } },
-        React.createElement("form", { onClick: (e) => e.stopPropagation(), onSubmit: (e) => { e.preventDefault(); send("gmail"); }, style: { ...S.card, width: "min(440px, 100%)", maxHeight: "92vh", overflowY: "auto", padding: 22, boxSizing: "border-box" } },
+        React.createElement("input", { value: form[k], onChange: set(k), ...extra, style: inputStyle })));
+    const shell = (children) => React.createElement("div", { className: "hk-fade", role: "dialog", "aria-modal": true, "aria-label": kind === "tour" ? "Request a tour" : "Request info", onClick: onClose, style: { position: "fixed", inset: 0, background: "rgba(36,27,31,.5)", zIndex: 90, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 } },
+        React.createElement("div", { onClick: (e) => e.stopPropagation(), style: { ...S.card, width: "min(460px, 100%)", maxHeight: "92vh", overflowY: "auto", padding: 22, boxSizing: "border-box" } },
             React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 } },
                 React.createElement("div", null,
                     React.createElement("div", { style: { fontWeight: 900, fontSize: 20, color: T.ink } }, kind === "tour" ? "Request a tour" : "Request info"),
-                    React.createElement("div", { style: { fontSize: 16, color: T.sub, marginTop: 2 } }, l.name, unit ? ` \u00B7 ${unit.label}` : l.price ? ` \u00B7 $${l.price}${priceUnit(l)}` : "")),
-                React.createElement("button", { type: "button", className: "hk-btn", onClick: onClose, "aria-label": "Close", style: { width: 28, height: 28, borderRadius: 99, background: T.stone, fontSize: 16, flexShrink: 0 } }, "\u00D7")),
-            status === "sent" ? (React.createElement("div", { style: { marginTop: 18 } },
-                React.createElement("div", { style: { fontSize: 17, fontWeight: 800, color: T.green } }, "Email opened"),
-                React.createElement("p", { style: { fontSize: 16, color: T.sub, lineHeight: 1.6, marginTop: 6 } }, "Finish sending in your mail app. This draft is logged in Contact history; Hokie Housing cannot confirm delivery.", l.phone ? ` You can also call ${l.phone}.` : ""),
-                React.createElement("button", { type: "button", className: "hk-btn", style: { ...S.primary, width: "100%", marginTop: 16 }, onClick: onClose }, "Done"))) : (React.createElement(React.Fragment, null,
-                React.createElement("div", { style: { display: "grid", gap: 10, marginTop: 16 } },
-                    React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 } },
-                        field("Your name", "name", { autoComplete: "name", required: true }),
-                        field("Phone (optional)", "phone", { type: "tel", autoComplete: "tel" })),
-                    kind === "tour" ? field("Preferred time", "tourWhen", { placeholder: "Fri afternoon" }) : field("Move-in", "moveIn", { placeholder: "Aug 2027" }),
-                    React.createElement("label", { style: { display: "grid", gap: 4, fontSize: 16, fontWeight: 700, color: T.sub } },
-                        "Message",
-                        React.createElement("textarea", { value: form.message, onChange: set("message"), rows: 4, style: { padding: "10px 12px", borderRadius: 10, border: `1.5px solid ${T.line}`, fontSize: 16, fontFamily: "inherit", color: T.ink, resize: "vertical", boxSizing: "border-box", width: "100%" } }))),
-                React.createElement("div", { style: { fontSize: 16, color: T.sub, marginTop: 12, display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap" } },
-                    React.createElement("span", { style: { fontWeight: 700 } }, "To:"),
-                    to ? React.createElement("span", null, to, !l.email && " (Hokie Housing team \u2014 we forward it)") : React.createElement("span", { style: { color: T.orange } }, "no email on file \u2014 add one in Gmail", l.phone ? `, or call ${l.phone}` : "")),
-                React.createElement("button", { type: "submit", className: "hk-btn", disabled: !valid, style: { ...S.primary, width: "100%", marginTop: 12, opacity: valid ? 1 : 0.55, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 } },
-                    React.createElement(Icon, { name: "mail", size: 16 }), kind === "tour" ? "Request tour in Gmail" : "Open in Gmail"),
-                React.createElement("button", { type: "button", className: "hk-btn", disabled: !valid, onClick: () => send("mailto"), style: { background: "transparent", color: T.sub, fontSize: 16, fontWeight: 700, width: "100%", marginTop: 8 } }, "Use another mail app instead"))))));
+                    React.createElement("div", { style: { fontSize: 16, color: T.sub, marginTop: 2 } }, l.name, unit ? ` · ${unit.label}` : "")),
+                React.createElement("button", { type: "button", className: "hk-btn", onClick: onClose, "aria-label": "Close", style: { width: 28, height: 28, borderRadius: 99, background: T.stone, fontSize: 16, flexShrink: 0 } }, "×")),
+            children));
+    if (!ready) return shell(React.createElement("p", { style: { ...S.sub, marginTop: 16 } }, "Loading…"));
+    if (!to)
+        return shell(React.createElement(React.Fragment, null,
+            React.createElement("p", { style: { ...S.sub, lineHeight: 1.6, marginTop: 12 } }, `${l.manager || "This owner"} hasn’t published an email. Text or call them — your message is ready to send.`),
+            React.createElement("textarea", { value: form.message, onChange: set("message"), rows: 4, "aria-label": "Message", style: { ...inputStyle, marginTop: 12, resize: "vertical" } }),
+            React.createElement("div", { style: { display: "grid", gap: 10, marginTop: 14 } },
+                l.phone && React.createElement("a", { href: smsHref(l.phone, `${form.message.trim()}${form.name.trim() ? ` — ${form.name.trim()}` : ""}`), onClick: () => { onContact(l, "phone", smsHref(l.phone, form.message), unit); onSent(form.message, "Text opened", { to: l.phone, subject, unit: unit ? unit.label : null, via: "Text" }); }, className: "hk-btn", style: { ...S.primary, textAlign: "center", textDecoration: "none" } }, `Text ${l.phone}`),
+                l.phone && React.createElement("a", { href: telHref(l.phone), onClick: () => onContact(l, "phone", telHref(l.phone), unit), className: "hk-btn", style: { ...S.ghost, textAlign: "center", textDecoration: "none" } }, `Call ${l.phone}`),
+                (l.website || l.sourceUrl) && React.createElement("a", { href: l.website || l.sourceUrl, target: "_blank", rel: "noopener noreferrer", onClick: () => onContact(l, "website", l.website || l.sourceUrl, unit), style: { color: T.maroon, textAlign: "center", fontSize: 16, fontWeight: 700 } }, l.website ? "Property website" : "Original listing"))));
+    if (status === "sent" || status === "draft")
+        return shell(React.createElement("div", { style: { marginTop: 18 } },
+            React.createElement("div", { style: { fontSize: 18, fontWeight: 800, color: T.green } }, status === "sent" ? "Message sent" : "Draft opened in Gmail"),
+            React.createElement("p", { style: { fontSize: 16, color: T.sub, lineHeight: 1.6, marginTop: 6 } }, status === "sent"
+                ? `Sent to ${sentTo}. Their reply will come to ${form.email.trim()} — we emailed you a copy.`
+                : `Hit send in Gmail to deliver it to ${to}. It’s saved in Contact history.`),
+            React.createElement("button", { type: "button", className: "hk-btn", style: { ...S.primary, width: "100%", marginTop: 16 }, onClick: onClose }, "Done")));
+    return shell(React.createElement("form", { onSubmit: submit, style: { display: "grid", gap: 10, marginTop: 16 } },
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 } },
+            field("Your name", "name", { autoComplete: "name", required: true }),
+            field("VT email", "email", { type: "email", autoComplete: "email", placeholder: "you@vt.edu", required: true })),
+        form.email && !emailOk && React.createElement("div", { style: { fontSize: 15, color: T.orange, fontWeight: 700 } }, "Use your @vt.edu address so the property can reply."),
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 } },
+            field("Phone (optional)", "phone", { type: "tel", autoComplete: "tel" }),
+            kind === "tour" ? field("Preferred time", "tourWhen", { placeholder: "Fri afternoon" }) : field("Move-in", "moveIn", { placeholder: "Aug 2027" })),
+        React.createElement("label", { style: { display: "grid", gap: 4, fontSize: 16, fontWeight: 700, color: T.sub } },
+            "Message",
+            React.createElement("textarea", { value: form.message, onChange: set("message"), rows: 4, maxLength: 2000, style: { ...inputStyle, resize: "vertical" } })),
+        // Honeypot: hidden from people, filled by bots.
+        React.createElement("input", { value: form.website, onChange: set("website"), tabIndex: -1, autoComplete: "off", "aria-hidden": true, style: { position: "absolute", left: -9999, width: 1, height: 1, opacity: 0 } }),
+        React.createElement("div", { style: { fontSize: 15, color: T.sub } }, "To ", React.createElement("b", { style: { color: T.ink } }, l.manager || l.name), ". Replies go to your VT email."),
+        error && React.createElement("div", { role: "alert", style: { fontSize: 15, color: T.orange, fontWeight: 700 } }, error),
+        React.createElement("button", { type: "submit", className: "hk-btn", disabled: !valid || status === "sending", style: { ...S.primary, width: "100%", marginTop: 4, opacity: valid ? 1 : 0.55, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 } },
+            React.createElement(Icon, { name: "mail", size: 16 }), status === "sending" ? "Sending…" : kind === "tour" ? "Send tour request" : "Send message"),
+        l.phone && React.createElement("a", { href: telHref(l.phone), onClick: () => onContact(l, "phone", telHref(l.phone), unit), style: { color: T.maroon, textAlign: "center", fontSize: 16, fontWeight: 700 } }, `Or call ${l.phone}`)));
 }
 /* "I'm interested" — a mini profile attached to a listing so students can find each
    other around a place. `people` = everyone interested in this listing; `mine` = the

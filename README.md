@@ -108,8 +108,8 @@ See [scraper/README.md](scraper/README.md) for how it works and the options.
 
 1. render.com > New > Blueprint > pick this repo. `render.yaml` defines one Node web
    service plus a 1GB disk for sponsorship metrics.
-2. In the service's Environment tab, set `OPENAI_API_KEY` (optional; built-in search
-   works without it).
+2. In the service's Environment tab, set `RESEND_API_KEY` + `MAIL_FROM` (direct
+   messages to properties) and `OPENAI_API_KEY` (optional; built-in search works without it).
 3. Add your domain under Settings > Custom Domains and point DNS at it.
 
 The host doesn't need the 800MB `photos/` folder: missing local photos redirect to
@@ -117,7 +117,9 @@ their CDN copies.
 
 ## Config (in `index.html`)
 
-- `CONTACT.inbox` — where "Request info" emails go when a listing has no email.
+- `CONTACT.inbox` — optional catch-all for Request info when a listing has no known email.
+- Messaging: `data/contacts.json` holds verified leasing emails; set `RESEND_API_KEY` and
+  `MAIL_FROM` on the server to send directly (see "Messaging properties" in scraper/README.md).
 - `BACKEND` — Supabase URL + anon key: VT Google sign-in and shared "I'm interested"
   lists. Setup and database rules: [backend/README.md](backend/README.md).
 - `SPONSOR_OFFER` — homepage sponsorship slots, terms and (optional) price shown on the
@@ -155,8 +157,9 @@ resolve rent-unit inference; refresh and verify student restriction evidence;
 verify the deployed site without local photos; and test mobile/keyboard flows.
 Shared features require real authentication and owner-scoped database policies.
 
-Request info now offers phone/property/original-listing links when no recipient
-email exists. Opening an email is recorded as a draft, not confirmed delivery.
+Request info sends the message to the property (replies go to the student) when mail is
+configured, else opens a Gmail draft to the same verified address; owners without an email
+get Text/Call. Contact history marks which were sent and which were drafts.
 
 ## Photo layout preference
 
