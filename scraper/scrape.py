@@ -481,13 +481,13 @@ def build_overview(l: dict, medians: dict) -> tuple[str, list[str], list[str]]:
     if walk is not None and walk <= 15:
         pros.append(f"{walk}-min walk to campus")
     elif walk is not None and walk <= 25:
-        pros.append(f"Walkable — about {walk} min to campus")
+        pros.append(f"Walkable, about {walk} min to campus")
     if stop and stop["walkMin"] <= 5:
         pros.append(f"BT stop {stop['walkMin']} min away ({', '.join(stop['routes'][:3])})")
     elif stop and stop["walkMin"] <= 10:
         pros.append(f"Bus stop within a {stop['walkMin']}-min walk")
     if l.get("rating") and l.get("reviews", 0) >= 5 and l["rating"] >= 4.0:
-        pros.append(f"Well reviewed — ★{l['rating']} from {l['reviews']} renters")
+        pros.append(f"Well reviewed: ★{l['rating']} from {l['reviews']} renters")
     community = [w for w, k in (("pool", "pool"), ("gym", "fitness"), ("study lounge", "study"), ("clubhouse", "clubhouse"), ("shuttle", "shuttle")) if k in am]
     if len(community) >= 2:
         pros.append("Community amenities: " + ", ".join(community))
@@ -508,9 +508,9 @@ def build_overview(l: dict, medians: dict) -> tuple[str, list[str], list[str]]:
         pros.append("Units available now")
 
     if walk is not None and walk > 30 and not (stop and stop["walkMin"] <= 10):
-        cons.append(f"Far from campus ({drive} min drive) — you'll want a car" if drive else "Far from campus — you'll want a car")
+        cons.append(f"Far from campus ({drive} min drive), so you'll want a car" if drive else "Far from campus, so you'll want a car")
     elif walk is not None and walk > 30:
-        cons.append("Too far to walk — plan on the bus")
+        cons.append("Too far to walk, so plan on the bus")
     if not stop:
         cons.append("No BT stop within a 12-min walk")
     if l.get("pets") is False and ("no pets" in am or "pets not allowed" in am):
@@ -522,7 +522,7 @@ def build_overview(l: dict, medians: dict) -> tuple[str, list[str], list[str]]:
     if not l.get("furnished") and l.get("type") == "Apartment":
         cons.append("Unfurnished")
     if l.get("shared"):
-        cons.append("Room in a shared unit — roommates are set by the landlord")
+        cons.append("Room in a shared unit; the landlord sets roommates")
     aud = l.get("audience") or {}
     if aud and aud.get("undergrad") is False:
         cons.append("Undergrads not allowed")
