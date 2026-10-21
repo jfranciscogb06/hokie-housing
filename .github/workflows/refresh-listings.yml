@@ -1,0 +1,44 @@
+# On-demand catalog refresh: Actions tab > "Refresh listings" > Run workflow.
+# Never scheduled. Re-crawls offcampus.vt.edu, then commits data/listings.* if anything changed;
+# a host that deploys from main (Render) picks up the new catalog automatically.
+name: Refresh listings
+on:
+  workflow_dispatch:
+    inputs:
+      details:
+        description: "Detail pages to fetch (changed = only listings updated since the last run)"
+        default: changed
+        type: choice
+        options: [changed, all]
+permissions:
+  contents: write
+concurrency: refresh-listings
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Restore portal cache
+        uses: actions/cache@v4
+        with:
+          path: data/raw
+          key: portal-raw-${{ github.run_id }}
+          restore-keys: portal-raw-
+      - name: Install scraper dependencies
+        run: pip install --quiet curl_cffi pillow
+      - name: Scrape
+        working-directory: scraper
+        run: python scrape.py --remote-photos --details ${{ inputs.details }}
+      - name: Test the new catalog
+        run: npm test
+      - name: Commit if changed
+        run: |
+          git add data/listings.js data/listings.json data/amenities.json data/bt_stops.json
+          if git diff --cached --quiet; then echo "No catalog changes."; exit 0; fi
+          git -c user.name="hokie-housing-bot" -c user.email="actions@users.noreply.github.com" \
+            commit -m "Refresh listings ($(date -u +%Y-%m-%d))"
+          git push

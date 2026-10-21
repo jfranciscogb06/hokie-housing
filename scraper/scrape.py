@@ -577,6 +577,7 @@ def main():
     ap.add_argument("--radius", type=float, default=8.0, help="only publish listings within N miles of campus")
     ap.add_argument("--browser", action="store_true", help="use a real Chrome window instead of curl_cffi")
     ap.add_argument("--delay", type=float, default=1.0, help="seconds between page loads")
+    ap.add_argument("--remote-photos", action="store_true", help="don't download photos; publish CDN URLs (for server/CI runs)")
     args = ap.parse_args()
 
     DATA.mkdir(parents=True, exist_ok=True)
@@ -658,6 +659,14 @@ def main():
                 srcs = photo_sources(p, d)
                 groups = photo_groups(p, d)
                 extra: dict[str, list[str]] = {}
+                if args.remote_photos:
+                    # Server/CI runs: no 800MB photo folder; the site loads the CDN copies directly.
+                    rec = to_app(sid, p, d, amenities, [full_size_url(x) for x in srcs[:args.photos or 8]],
+                                 {tag: [full_size_url(x) for x in g[:4 if tag.startswith("beds") else 1]] for tag, g in groups.items()})
+                    rec["photosRemote"] = list(rec["photos"])
+                    rec["photoFallbacks"] = {}
+                    listings.append(rec)
+                    continue
                 if photos_on:
                     try:
                         photos = sync_photos(client, sid, srcs, manifest, args.photos)
