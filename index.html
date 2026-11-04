@@ -795,7 +795,8 @@ function PhotoCarousel({ l, arrowSize = 24, photos, resetKey }) {
     const [fallback, setFallback] = useState({});
     const live = all.map((src, idx) => ({ src: fallback[idx] || src, idx })).filter((p) => !broken[p.idx]);
     if (live.length === 0)
-        return null;
+        return React.createElement("div", { style: { position: "absolute", inset: 0, display: "grid", placeContent: "center", justifyItems: "center", gap: 8, background: T.stone, color: T.sub, fontSize: 16 } },
+            React.createElement(Icon, { name: "photo", size: 28 }), all.length ? "Photos temporarily unavailable" : "No photos provided");
     const pos = ((i % live.length) + live.length) % live.length;
     const current = live[pos];
     const go = (delta) => setI((v) => v + delta);
