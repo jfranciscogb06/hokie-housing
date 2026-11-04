@@ -56,9 +56,10 @@
     // the quoted rent when it was split, else per-person rent x bedrooms. A room in a
     // shared unit has no whole-unit price.
     const unitTotal = p => p.priceTotal || ((p.basis || p.priceBasis) === "room" || !(p.price > 0) ? null : p.price * Math.max(p.beds || 0, 1));
-    function matchingPlans(l, s) {
+    function matchingPlans(l, s, maxPerPerson = null) {
         const plans = l.plans && l.plans.length ? l.plans : [l];
         return plans.filter(p => {
+            if (maxPerPerson !== null && (!knownNumber(p.price) || p.price <= 0 || p.price > maxPerPerson)) return false;
             if (s.minBeds !== null && (!knownNumber(p.beds) || p.beds < s.minBeds)) return false;
             if (s.maxBeds !== null && (!knownNumber(p.beds) || p.beds > s.maxBeds)) return false;
             if (s.minBaths !== null && (!knownNumber(p.baths) || p.baths < s.minBaths)) return false;
@@ -67,8 +68,10 @@
             return (s.minPrice === null || rent >= s.minPrice) && (s.maxPrice === null || rent <= s.maxPrice);
         });
     }
-    function compile(value) {
+    function compile(value, { maxPerPerson = null } = {}) {
+        if (maxPerPerson !== null && (!knownNumber(maxPerPerson) || maxPerPerson < 0 || maxPerPerson > 100000)) throw new Error("Invalid per-person budget");
         const s = validate(value), facets = [];
+        const hasPlanCriteria = maxPerPerson !== null || [s.minPrice, s.maxPrice, s.minBeds, s.maxBeds, s.minBaths].some(v => v !== null) || s.rentBasis === "unit";
         if (s.minPrice !== null) facets.push(`rent ≥ $${s.minPrice}`);
         if (s.maxPrice !== null) facets.push(`rent ≤ $${s.maxPrice}`);
         if (s.rentBasis) facets.push(s.rentBasis === "bed" ? "per person" : "whole-unit total");
@@ -99,11 +102,10 @@
             if (s.amenities.some(a => !amenities[a].test(am)) || s.excludeAmenities.some(a => amenities[a].test(am))) return false;
             // Check rent, beds and baths against the SAME floor plan, rather than a
             // community's cheapest studio plus its largest, more expensive plan.
-            const hasPlanCriteria = [s.minPrice, s.maxPrice, s.minBeds, s.maxBeds, s.minBaths].some(v => v !== null) || s.rentBasis === "unit";
             if (!hasPlanCriteria) return true;
-            return matchingPlans(l, s).length > 0;
+            return matchingPlans(l, s, maxPerPerson).length > 0;
         };
-        return { spec: s, facets, filter, matchingPlans: l => matchingPlans(l, s), text: s.text, sort: s.sort, beds: s.minBeds, warnings: s.unsupported };
+        return { spec: s, facets, filter, hasPlanCriteria, matchingPlans: l => matchingPlans(l, s, maxPerPerson), text: s.text, sort: s.sort, beds: s.minBeds, warnings: s.unsupported };
     }
     function matchesText(l, text) {
         if (!text) return true;

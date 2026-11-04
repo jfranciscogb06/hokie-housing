@@ -3,10 +3,10 @@ services:
   - type: web
     name: hokie-housing
     runtime: node
-    plan: starter            # a persistent disk needs a paid plan; free works without sponsorship metrics
+    plan: starter            # a persistent disk needs a paid plan; for free, remove both disk and DATA_DIR (runtime changes are then ephemeral)
     buildCommand: "true"     # no dependencies or build step
     startCommand: npm start
-    healthCheckPath: /
+    healthCheckPath: /healthz
     envVars:
       - key: HOST
         value: 0.0.0.0
@@ -18,10 +18,8 @@ services:
         sync: false          # set in the Render dashboard; optional (built-in search works without it)
       - key: OPENAI_SEARCH_MODEL
         value: gpt-4o-mini
-      - key: RESEND_API_KEY
-        sync: false          # direct messages to properties; optional (falls back to Gmail drafts)
-      - key: MAIL_FROM
-        sync: false          # e.g. "Hokie Housing <messages@hokiehousing.com>" on a domain verified in Resend
+      - key: TRUST_PROXY_HOPS
+        value: "0"           # ignore forwarded headers until the actual proxy chain is verified
     disk:
       name: hokie-data
       mountPath: /var/data

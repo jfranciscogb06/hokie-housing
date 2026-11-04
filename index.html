@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Hokie Housing: find housing near Virginia Tech</title>
-<meta name="description" content="Unofficial, student-built app for finding Blacksburg housing near Virginia Tech: real listings, subleases, roommate matching, and an AI housing assistant.">
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9IiM4NjFGNDEiLz48dGV4dCB4PSIzMiIgeT0iNDUiIGZvbnQtZmFtaWx5PSJBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIzNiIgZm9udC13ZWlnaHQ9IjkwMCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkg8L3RleHQ+PC9zdmc+">
+<title>Blacksburg Housing | Find your next place</title>
+<meta name="description" content="Find off-campus housing in Blacksburg. Search by budget, bedrooms and commute, compare places, and contact properties through your own Gmail.">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9IiM4NjFGNDEiLz48cGF0aCBkPSJNMTMgMjkgMzIgMTNsMTkgMTZNMTggMjV2MjZoMjhWMjVNMjcgNTFWMzZoMTB2MTUiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iNCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PC9zdmc+">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <!-- Live catalog written by scraper/scrape.py. If it's missing the app falls back to the built-in demo listings. -->
@@ -13,6 +13,8 @@
 <script src="eligibility.js"></script>
 <script src="catalog.js"></script>
 <script src="housing-search.js"></script>
+<script src="contact-history.js"></script>
+<script src="site-config.js"></script>
 <style>html,body,#root{margin:0;padding:0;height:100%;}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:16px;}</style>
 </head>
 <body>
@@ -37,9 +39,9 @@ const T = {
    Request info / tour emails are sent by the student from their own Gmail: we build
    the email and open a Gmail compose window with it filled in (new tab). No mail
    service, no API keys. Recipient = the listing's email if the scraper found one,
-   otherwise CONTACT.inbox (yours) with the landlord's phone/website in the body. */
+   otherwise property phone/website links are offered. */
 const CONTACT = {
-    inbox: "",   // <- your inquiry inbox, e.g. "hokiehousing@vt.edu" (used when a listing has no email)
+    inbox: window.HOUSING_CONFIG?.contactEmail || "", // Set SUPPORT_EMAIL on the host when ready.
 };
 /* Homepage sponsorship requests from property managers (see "Homepage sponsorships" in
    README.md). Requests open a Gmail draft to CONTACT.inbox; payment and activation are
@@ -470,7 +472,7 @@ const css = `
     .hk-mobile-only { display:flex; }
     .hk-app { padding-bottom:calc(80px + env(safe-area-inset-bottom)); }
     .hk-header-row { height:68px !important; }
-    .hk-header-row > div:first-child { font-size:24px !important; }
+    .hk-brand { font-size:clamp(18px,5.6vw,24px) !important; }
     .hk-app input, .hk-app select, .hk-app textarea { font-size:17px !important; }
     .hk-mobile-bottom-nav { display:flex; position:fixed; bottom:0; left:0; right:0; z-index:60; background:#fff; border-top:1px solid #E5E7EB; padding:8px 12px calc(8px + env(safe-area-inset-bottom)); gap:8px; }
     .hk-mobile-bottom-nav button { flex:1; min-height:56px; font-size:16px; font-weight:700; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; border-radius:12px; background:transparent; color:#6E5F65; }
@@ -604,17 +606,10 @@ const S = {
     primary: { background: T.maroon, color: "#fff", borderRadius: 12, padding: "11px 18px", fontSize: 16, fontWeight: 700 },
     ghost: { background: T.stone, color: T.ink, borderRadius: 12, padding: "11px 18px", fontSize: 16, fontWeight: 700 },
 };
-/* White HokieBird mark: fanned tail, body, head + wattle. Fills with `color`, so it's
-   white on maroon/orange and can sit in a maroon disc on light backgrounds. */
-function HokieBird({ size = 24, color = "#fff", style }) {
-    const feather = (deg) => React.createElement("ellipse", { key: deg, cx: 25, cy: 26, rx: 4.6, ry: 15, transform: `rotate(${deg} 25 44)` });
-    return (React.createElement("svg", { width: size, height: size, viewBox: "0 0 64 64", "aria-hidden": "true", style: { display: "block", flexShrink: 0, ...style } },
-        React.createElement("g", { fill: color },
-            [-68, -48, -28, -8, 12, 32].map(feather),
-            React.createElement("ellipse", { cx: 28, cy: 45, rx: 14, ry: 10 }),
-            React.createElement("path", { d: "M36 41 C38 34 40 28 44 24 C47 21 52 21 53 25 L59 26.5 L53 28.5 C52.5 33 49 35 45 35 C42 35 39 38 37 42 Z" }),
-            React.createElement("path", { d: "M52 28.5 C53.5 31.5 52.5 35 50 36.5 C49 33.5 50 30.5 52 28.5 Z" }),
-            React.createElement("path", { d: "M22 54 L21 62 L18 62 L19.5 54 Z M30 54 L30 62 L27 62 L27.5 54 Z" }))));
+/* Original house mark, independent of university names and mascots. */
+function HousingMark({ size = 24, color = "#fff", style }) {
+    return React.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", "aria-hidden": "true", style: { display: "block", flexShrink: 0, ...style } },
+        React.createElement("path", { d: "M3 10.5 12 3l9 7.5M5 9v12h14V9M9 21v-7h6v7", fill: "none", stroke: color, strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round" }));
 }
 /* Line icons (Feather-style), sized by font-size and colored by currentColor. */
 const ICONS = {
@@ -714,9 +709,26 @@ function Ring({ score, size = 84 }) {
    "3 / 45" counter, keyboard ←/→/Esc, swipe on touch, thumbnail strip at the bottom. */
 function Lightbox({ photos, index, onIndex, onClose, title, remote }) {
     const n = photos.length;
+    const galleryRef = useRef(null);
+    useEffect(() => {
+        const previous = document.activeElement;
+        galleryRef.current?.querySelector('button')?.focus();
+        return () => previous?.focus();
+    }, []);
     const go = (d) => onIndex(((index + d) % n + n) % n);
     useEffect(() => {
-        const key = (e) => { if (e.key === "Escape") onClose(); else if (e.key === "ArrowRight") go(1); else if (e.key === "ArrowLeft") go(-1); };
+        const key = (e) => {
+            if (e.key === "Escape") onClose();
+            else if (e.key === "ArrowRight") { e.preventDefault(); go(1); }
+            else if (e.key === "ArrowLeft") { e.preventDefault(); go(-1); }
+            else if (e.key === "Tab") {
+                const controls = galleryRef.current?.querySelectorAll('button:not(:disabled)');
+                if (!controls?.length) return;
+                const first = controls[0], last = controls[controls.length - 1];
+                if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+                else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+            }
+        };
         window.addEventListener("keydown", key);
         const prev = document.body.style.overflow;
         document.body.style.overflow = "hidden";
@@ -727,26 +739,31 @@ function Lightbox({ photos, index, onIndex, onClose, title, remote }) {
     const touch = useRef(null);
     const arrow = (dir) => React.createElement("button", { className: "hk-btn", "aria-label": dir > 0 ? "Next photo" : "Previous photo", onClick: (e) => { e.stopPropagation(); go(dir); }, style: { position: "absolute", top: "50%", [dir > 0 ? "right" : "left"]: 18, transform: "translateY(-50%)", width: 46, height: 46, borderRadius: 99, background: "rgba(255,255,255,.92)", color: T.ink, fontSize: 26, display: "grid", placeItems: "center", boxShadow: "0 4px 16px rgba(0,0,0,.3)", zIndex: 2 } }, dir > 0 ? "\u203A" : "\u2039");
     // Portal to <body>: the profile page's fade animation would otherwise trap position:fixed inside it.
-    return ReactDOM.createPortal(React.createElement("div", { className: "hk-lightbox", onClick: onClose, style: { position: "fixed", inset: 0, background: "#0c080a", zIndex: 100, display: "flex", flexDirection: "column", animation: "fadeIn .15s ease" } },
+    return ReactDOM.createPortal(React.createElement("div", { ref: galleryRef, className: "hk-lightbox", role: "dialog", "aria-modal": true, "aria-label": `${title} photo gallery`, onClick: onClose, style: { position: "fixed", inset: 0, background: "#0c080a", zIndex: 100, display: "flex", flexDirection: "column", animation: "fadeIn .15s ease" } },
         React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", color: "#fff" } },
-            React.createElement("div", { style: { fontWeight: 700, fontSize: 16, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, title),
-            React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 14 } },
+            React.createElement("div", { style: { fontWeight: 700, fontSize: 16, minWidth: 0, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, title),
+            React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 14, flexShrink: 0 } },
                 React.createElement("span", { style: { fontSize: 16, fontWeight: 700, opacity: .85 } }, index + 1, " / ", n),
-                React.createElement("button", { className: "hk-btn", onClick: onClose, "aria-label": "Close", style: { width: 36, height: 36, borderRadius: 99, background: "rgba(255,255,255,.14)", color: "#fff", fontSize: 20 } }, "\u2715"))),
+                React.createElement("button", { className: "hk-btn", onClick: onClose, "aria-label": "Close", style: { width: 44, height: 44, borderRadius: 99, background: "rgba(255,255,255,.14)", color: "#fff", fontSize: 20 } }, "\u2715"))),
         React.createElement("div", { style: { flex: 1, position: "relative", minHeight: 0, display: "grid", placeItems: "center", padding: "0 76px" },
             onTouchStart: (e) => { touch.current = e.touches[0].clientX; },
             onTouchEnd: (e) => { if (touch.current == null) return; const dx = e.changedTouches[0].clientX - touch.current; touch.current = null; if (Math.abs(dx) > 40) go(dx < 0 ? 1 : -1); } },
             n > 1 && arrow(-1),
             React.createElement("img", { key: index, src: photos[index], alt: `${title} photo ${index + 1}`, onClick: (e) => e.stopPropagation(), onError: (e) => { const r = remote && remote(photos[index]); if (r && e.target.src !== r) e.target.src = r; }, style: { maxWidth: "100%", maxHeight: n > 1 ? "calc(100vh - 170px)" : "calc(100vh - 80px)", objectFit: "contain", borderRadius: 6, boxShadow: "0 10px 40px rgba(0,0,0,.5)", animation: "fadeIn .2s ease" } }),
             n > 1 && arrow(1)),
-        n > 1 && React.createElement("div", { ref: stripRef, className: "hk-scroll", onClick: (e) => e.stopPropagation(), style: { display: "flex", gap: 6, overflowX: "auto", padding: "12px 18px 16px", justifyContent: n < 10 ? "center" : "flex-start" } },
-            photos.map((src, k) => React.createElement("img", { key: k, src: src, alt: "", loading: "lazy", onClick: () => onIndex(k), onError: (e) => { const r = remote && remote(src); if (r && e.target.src !== r) e.target.src = r; }, style: { width: 92, height: 64, objectFit: "cover", borderRadius: 6, cursor: "pointer", flexShrink: 0, opacity: k === index ? 1 : .45, outline: k === index ? "2px solid #fff" : "none", outlineOffset: 2, transition: "opacity .15s" } })))), document.body);
+        n > 1 && React.createElement("div", { ref: stripRef, className: "hk-scroll", "aria-label": "Choose photo", onClick: (e) => e.stopPropagation(), style: { display: "flex", gap: 8, overflowX: "auto", padding: "12px 18px 16px", width: "fit-content", maxWidth: "100%", boxSizing: "border-box", margin: "0 auto", flexShrink: 0 } },
+            photos.map((src, k) => React.createElement("button", { key: k, type: "button", className: "hk-btn", "aria-label": `View photo ${k + 1}`, "aria-pressed": k === index, onClick: () => onIndex(k), style: { padding: 0, width: 92, height: 64, borderRadius: 6, background: "#332c30", flexShrink: 0, opacity: k === index ? 1 : .55, outline: k === index ? "2px solid #fff" : "none", outlineOffset: 2, transition: "opacity .15s" } },
+                React.createElement("img", { src, alt: "", loading: "lazy", onError: (e) => { const r = remote && remote(src); if (r && e.target.src !== r) e.target.src = r; }, style: { width: "100%", height: "100%", objectFit: "cover", borderRadius: 6, display: "block" } }))))), document.body);
 }
 /* Photos to show for a listing when the viewer cares about a specific bedroom count:
    photos captioned as that unit type first, then that plan's floor-plan drawing, then
    the regular gallery. Falls back to the gallery when nothing bed-specific exists. */
-function photosFor(l, beds) {
+function photosFor(l, beds, selectedPlan = null) {
     const base = l.photos || [];
+    if (selectedPlan?.image) {
+        const rest = photosFor(l, beds).list;
+        return { list: [selectedPlan.image, ...rest.filter(src => src !== selectedPlan.image)], tag: `${selectedPlan.name} floor plan` };
+    }
     if (!beds)
         return { list: base, tag: null };
     const key = String(beds);
@@ -832,7 +849,7 @@ function ListingCard({ l, saved, onSave, compared, onCompare, onOpen, bedsWanted
 }
 /* Prefilled Gmail compose for property inquiries. Records draft opening, not
    delivery. Properties without a listed email offer phone or website contacts. */
-/* Verified property contact emails (data/contacts.json), loaded once. */
+/* Published property contact emails (data/contacts.json), loaded once. */
 let contactDirPromise = null;
 const contactDirectory = () => contactDirPromise ||= fetch("data/contacts.json").then((r) => r.ok ? r.json() : { managers: {} }).catch(() => ({ managers: {} }));
 function useRecipient(l) {
@@ -841,16 +858,15 @@ function useRecipient(l) {
     useEffect(() => {
         if (l.email) return;
         let alive = true;
-        contactDirectory().then((d) => { if (!alive) return; setTo(d.managers?.[l.manager]?.email || CONTACT.inbox || null); setReady(true); });
+        contactDirectory().then((d) => { if (!alive) return; setTo(d.managers?.[l.manager]?.email || null); setReady(true); });
         return () => { alive = false; };
     }, [l.id]);
     return { to, ready };
 }
 const telHref = (phone) => `tel:${phone.replace(/[^\d+]/g, "")}`;
 const smsHref = (phone, body) => `sms:${phone.replace(/[^\d+]/g, "")}?&body=${encodeURIComponent(body)}`;
-/* Request info / tour. Sends directly through /api/message (Reply-To = the student)
-   when the server has mail set up; otherwise opens a Gmail draft to the same verified
-   address. Properties with no published email get Text / Call / website instead. */
+/* Request info / tour opens Gmail with a draft for the student to review and send.
+   Properties with no published email get Text / Call / website instead. */
 function InquiryModal({ l, kind, unit, user, onClose, onSent, onContact }) {
     const { to, ready } = useRecipient(l);
     const what = unit ? `${unit.label} at ${l.name}` : l.name;
@@ -860,9 +876,7 @@ function InquiryModal({ l, kind, unit, user, onClose, onSent, onContact }) {
             ? `Hi! I'd like to schedule a tour of ${what}${l.address ? ` (${l.address})` : ""}. When are you available?`
             : `Hi! I'm a Virginia Tech student interested in ${what}${l.address ? `, ${l.address}` : ""}. Is it still available${unit ? "" : l.priceTotal ? ` at ${usd(l.priceTotal)} a month` : l.price ? ` at ${usd(l.price)} per person` : ""}? Thanks!`,
     });
-    const [status, setStatus] = useState("idle"); // idle | sending | sent | draft
-    const [error, setError] = useState("");
-    const [sentTo, setSentTo] = useState("");
+    const [status, setStatus] = useState("idle"); // idle | draft
     const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
     const emailOk = /^[^\s@]+@vt\.edu$/i.test(form.email.trim());
     const valid = form.name.trim().length > 1 && emailOk && form.message.trim().length >= 10;
@@ -877,38 +891,24 @@ function InquiryModal({ l, kind, unit, user, onClose, onSent, onContact }) {
     const draft = (recipient) => {
         window.open(gmailCompose(recipient, subject, body), "_blank", "noopener");
         setStatus("draft");
-        onSent(body, "Opened in Gmail", { to: recipient, subject, unit: unit ? unit.label : null, via: "Gmail draft" });
+        onSent(body, "Opened in Gmail", { to: recipient, subject, unit: unit ? unit.label : null, via: "Gmail", transport: "gmail", outcome: "opened" });
     };
-    const submit = async (e) => {
+    const submit = (e) => {
         e.preventDefault();
-        if (!valid || status === "sending") return;
-        setStatus("sending"); setError("");
-        let r, data = {};
-        try {
-            r = await fetch("/api/message", { method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ listingId: l.id, kind, unit: unit ? unit.label : "", name: form.name, email: form.email, phone: form.phone, moveIn: form.moveIn, tourWhen: form.tourWhen, message: form.message, website: form.website }) });
-            data = await r.json().catch(() => ({}));
-        } catch { r = null; }
-        if (r && r.ok && data.sent) {
-            setSentTo(data.toName || l.manager || l.name); setStatus("sent");
-            onSent(body, "Sent", { to, subject, unit: unit ? unit.label : null, via: "Sent by Hokie Housing" });
-            return;
-        }
-        // Server can't send (not set up, or the mail service failed): same message as a Gmail draft.
-        if (!r || data.code === "not_configured" || data.code === "send_failed") { draft(data.to || to); return; }
-        setStatus("idle"); setError(data.error || "Couldn’t send that. Try again.");
+        if (!valid || !to) return;
+        draft(to);
     };
     const inputStyle = { padding: "10px 12px", borderRadius: 10, border: `1.5px solid ${T.line}`, fontSize: 16, fontFamily: "inherit", fontWeight: 500, color: T.ink, boxSizing: "border-box", width: "100%" };
     const field = (label, k, extra = {}) => (React.createElement("label", { style: { display: "grid", gap: 4, fontSize: 16, fontWeight: 700, color: T.sub } },
         label,
         React.createElement("input", { value: form[k], onChange: set(k), ...extra, style: inputStyle })));
-    const shell = (children) => React.createElement("div", { className: "hk-fade", role: "dialog", "aria-modal": true, "aria-label": kind === "tour" ? "Request a tour" : "Request info", onClick: onClose, style: { position: "fixed", inset: 0, background: "rgba(36,27,31,.5)", zIndex: 90, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 } },
-        React.createElement("div", { onClick: (e) => e.stopPropagation(), style: { ...S.card, width: "min(460px, 100%)", maxHeight: "92vh", overflowY: "auto", padding: 22, boxSizing: "border-box" } },
+    const shell = (children) => React.createElement("div", { className: "hk-fade", onClick: onClose, style: { position: "fixed", inset: 0, background: "rgba(36,27,31,.5)", zIndex: 90, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 } },
+        React.createElement(DialogPanel, { label: kind === "tour" ? "Request a tour" : "Request info", onClose, style: { ...S.card, width: "min(460px, 100%)", maxHeight: "92vh", overflowY: "auto", padding: 22, boxSizing: "border-box" } },
             React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 } },
                 React.createElement("div", null,
                     React.createElement("div", { style: { fontWeight: 900, fontSize: 20, color: T.ink } }, kind === "tour" ? "Request a tour" : "Request info"),
                     React.createElement("div", { style: { fontSize: 16, color: T.sub, marginTop: 2 } }, l.name, unit ? ` · ${unit.label}` : "")),
-                React.createElement("button", { type: "button", className: "hk-btn", onClick: onClose, "aria-label": "Close", style: { width: 28, height: 28, borderRadius: 99, background: T.stone, fontSize: 16, flexShrink: 0 } }, "×")),
+                React.createElement("button", { type: "button", className: "hk-btn", onClick: onClose, "aria-label": "Close", style: { width: 44, height: 44, borderRadius: 99, background: T.stone, fontSize: 20, flexShrink: 0 } }, "×")),
             children));
     if (!ready) return shell(React.createElement("p", { style: { ...S.sub, marginTop: 16 } }, "Loading…"));
     if (!to)
@@ -916,15 +916,14 @@ function InquiryModal({ l, kind, unit, user, onClose, onSent, onContact }) {
             React.createElement("p", { style: { ...S.sub, lineHeight: 1.5, margin: "12px 0 0" } }, `${l.manager || "This owner"} hasn’t published an email. Text or call them; your message is ready to send.`),
             React.createElement("textarea", { value: form.message, onChange: set("message"), rows: 4, "aria-label": "Message", style: { ...inputStyle, marginTop: 14, resize: "vertical", lineHeight: 1.45 } }),
             React.createElement("div", { style: { display: "grid", gap: 8, marginTop: 14 } },
-                l.phone && React.createElement("a", { href: smsHref(l.phone, `${form.message.trim()}${form.name.trim() ? `\n${form.name.trim()}` : ""}`), onClick: () => { onContact(l, "phone", smsHref(l.phone, form.message), unit); onSent(form.message, "Text opened", { to: l.phone, subject, unit: unit ? unit.label : null, via: "Text" }); }, className: "hk-btn", style: { ...S.primary, textAlign: "center", textDecoration: "none" } }, `Text ${l.phone}`),
+                l.phone && React.createElement("a", { href: smsHref(l.phone, `${form.message.trim()}${form.name.trim() ? `\n${form.name.trim()}` : ""}`), onClick: () => onContact(l, "text", smsHref(l.phone, `${form.message.trim()}${form.name.trim() ? `\n${form.name.trim()}` : ""}`), unit, form.message.trim()), className: "hk-btn", style: { ...S.primary, textAlign: "center", textDecoration: "none" } }, `Text ${l.phone}`),
                 l.phone && React.createElement("a", { href: telHref(l.phone), onClick: () => onContact(l, "phone", telHref(l.phone), unit), className: "hk-btn", style: { ...S.ghost, textAlign: "center", textDecoration: "none" } }, `Call ${l.phone}`),
                 (l.website || l.sourceUrl) && React.createElement("a", { href: l.website || l.sourceUrl, target: "_blank", rel: "noopener noreferrer", onClick: () => onContact(l, "website", l.website || l.sourceUrl, unit), style: { color: T.maroon, textAlign: "center", fontSize: 16, fontWeight: 700 } }, l.website ? "Property website" : "Original listing"))));
-    if (status === "sent" || status === "draft")
+    if (status === "draft")
         return shell(React.createElement("div", { style: { marginTop: 18 } },
-            React.createElement("div", { style: { fontSize: 18, fontWeight: 800, color: T.green } }, status === "sent" ? "Message sent" : "Draft opened in Gmail"),
-            React.createElement("p", { style: { fontSize: 16, color: T.sub, lineHeight: 1.6, marginTop: 6 } }, status === "sent"
-                ? `Sent to ${sentTo}. Their reply will come to ${form.email.trim()}, and we emailed you a copy.`
-                : `Hit send in Gmail to deliver it to ${to}. It’s saved in Contact history.`),
+            React.createElement("div", { style: { fontSize: 18, fontWeight: 800, color: T.green } }, "Continue in Gmail"),
+            React.createElement("p", { style: { fontSize: 16, color: T.sub, lineHeight: 1.6, marginTop: 6 } }, `Review the draft and press Send in Gmail to contact ${to}. Contact history records the draft opening, not delivery.`),
+            status === "draft" && React.createElement("a", { href: gmailCompose(to, subject, body), target: "_blank", rel: "noopener noreferrer", className: "hk-btn", style: { ...S.ghost, display: "block", textAlign: "center", textDecoration: "none", marginTop: 12 } }, "Open Gmail draft"),
             React.createElement("button", { type: "button", className: "hk-btn", style: { ...S.primary, width: "100%", marginTop: 16 }, onClick: onClose }, "Done")));
     return shell(React.createElement("form", { onSubmit: submit, style: { display: "grid", gap: 10, marginTop: 16 } },
         React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 } },
@@ -939,10 +938,9 @@ function InquiryModal({ l, kind, unit, user, onClose, onSent, onContact }) {
             React.createElement("textarea", { value: form.message, onChange: set("message"), rows: 4, maxLength: 2000, style: { ...inputStyle, resize: "vertical" } })),
         // Honeypot: hidden from people, filled by bots.
         React.createElement("input", { value: form.website, onChange: set("website"), tabIndex: -1, autoComplete: "off", "aria-hidden": true, style: { position: "absolute", left: -9999, width: 1, height: 1, opacity: 0 } }),
-        React.createElement("div", { style: { fontSize: 15, color: T.sub } }, "To ", React.createElement("b", { style: { color: T.ink } }, l.manager || l.name), ". Replies go to your VT email. ", React.createElement("a", { href: "/privacy", target: "_blank", rel: "noopener", style: { color: T.sub } }, "Privacy")),
-        error && React.createElement("div", { role: "alert", style: { fontSize: 15, color: T.orange, fontWeight: 700 } }, error),
-        React.createElement("button", { type: "submit", className: "hk-btn", disabled: !valid || status === "sending", style: { ...S.primary, width: "100%", marginTop: 4, opacity: valid ? 1 : 0.55, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 } },
-            React.createElement(Icon, { name: "mail", size: 16 }), status === "sending" ? "Sending…" : kind === "tour" ? "Send tour request" : "Send message"),
+        React.createElement("div", { style: { fontSize: 15, color: T.sub } }, "To ", React.createElement("b", { style: { color: T.ink } }, l.manager || l.name), ". Opens a draft in Gmail; you review and send it there. ", React.createElement("a", { href: "/privacy", target: "_blank", rel: "noopener", style: { color: T.sub } }, "Privacy")),
+        React.createElement("button", { type: "submit", className: "hk-btn", disabled: !valid, style: { ...S.primary, width: "100%", marginTop: 4, opacity: valid ? 1 : 0.55, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 } },
+            React.createElement(Icon, { name: "mail", size: 16 }), "Open Gmail draft"),
         l.phone && React.createElement("a", { href: telHref(l.phone), onClick: () => onContact(l, "phone", telHref(l.phone), unit), style: { color: T.maroon, textAlign: "center", fontSize: 16, fontWeight: 700 } }, `Or call ${l.phone}`)));
 }
 /* "I'm interested" — a mini profile attached to a listing so students can find each
@@ -1006,7 +1004,7 @@ function ListingDetail({ l, onClose, onInquiry, saved, onSave, userName, bedsWan
     const [qa, setQa] = useState([]);
     useEffect(() => { setQa([]); setAsk(""); }, [l.id]);
     const plan = plans.find((p) => p.id === planSel) || null;
-    const ph = photosFor(l, plan ? plan.beds : bedsSel);
+    const ph = photosFor(l, plan ? plan.beds : bedsSel, plan);
     const bedWord = (b) => (b === 0 ? "Studio" : `${b} bed`);
     const planStatus = (p) => {
         if (p.status === "NotAvailable")
@@ -1131,7 +1129,7 @@ function ListingDetail({ l, onClose, onInquiry, saved, onSave, userName, bedsWan
                         qa.map((x, i) => React.createElement("div", { key: i, className: "hk-fade", style: { marginBottom: 8 } },
                             React.createElement("div", { style: { fontSize: 16, fontWeight: 700, color: T.sub } }, "You: ", x.q),
                             React.createElement("div", { style: { fontSize: 16, color: T.ink, lineHeight: 1.5, marginTop: 2 } }, x.a || "Not sure about that one from the listing.",
-                                !x.a && React.createElement("button", { className: "hk-btn", onClick: () => onAskBot && onAskBot(`${x.q} (about ${l.name})`), style: { marginLeft: 6, background: "transparent", color: T.maroon, fontWeight: 700, fontSize: 16, padding: 0 } }, "Ask HokieBot \u2192")))),
+                                !x.a && React.createElement("button", { className: "hk-btn", onClick: () => onAskBot && onAskBot(`${x.q} (about ${l.name})`), style: { marginLeft: 6, background: "transparent", color: T.maroon, fontWeight: 700, fontSize: 16, padding: 0 } }, "Ask Housing assistant \u2192")))),
                         React.createElement("form", { onSubmit: (e) => { e.preventDefault(); const q = ask.trim(); if (!q) return; setQa((xs) => [...xs.slice(-3), { q, a: answerAbout(l, q) }]); setAsk(""); }, style: { display: "flex", gap: 6 } },
                             React.createElement("input", { value: ask, onChange: (e) => setAsk(e.target.value), placeholder: "Ask about this place: \u201Ccheapest 4 bed?\u201D, \u201Cwhen can I move in?\u201D", "aria-label": "Ask about this listing", style: { flex: 1, padding: "9px 13px", borderRadius: 999, border: `1.5px solid ${T.line}`, fontSize: 16, fontFamily: "inherit", color: T.ink, minWidth: 0 } }),
                             React.createElement("button", { type: "submit", className: "hk-btn", style: { ...S.primary, padding: "9px 14px", fontSize: 16, borderRadius: 999 } }, "Ask"))),
@@ -1375,7 +1373,7 @@ function DialogPanel({ children, onClose, label, className, style }) {
     const keydown = e => {
         if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onClose(); }
         if (e.key !== "Tab") return;
-        const controls = [...ref.current.querySelectorAll("button, select, input, textarea, a[href]")].filter(el => !el.disabled && el.getClientRects().length);
+        const controls = [...ref.current.querySelectorAll("button, select, input, textarea, a[href]")].filter(el => !el.disabled && el.tabIndex >= 0 && el.getAttribute("aria-hidden") !== "true" && el.getClientRects().length);
         const first = controls[0], last = controls[controls.length - 1];
         if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
         else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
@@ -1421,7 +1419,7 @@ function Advertise({ listings, onBack }) {
     return (React.createElement("div", { style: { maxWidth: 760, margin: "0 auto", padding: "8px 0 40px" } },
         React.createElement("button", { className: "hk-btn", onClick: onBack, style: { ...S.ghost, padding: "8px 14px", fontSize: 15, marginBottom: 16 } }, "Back"),
         React.createElement("h1", { style: { ...S.h2, fontSize: 30 } }, "Advertise your property"),
-        React.createElement("p", { style: { fontSize: 17, lineHeight: 1.6, color: T.sub, marginTop: 8 } }, "Put your community in front of Virginia Tech students on the Hokie Housing homepage."),
+        React.createElement("p", { style: { fontSize: 17, lineHeight: 1.6, color: T.sub, marginTop: 8 } }, "Put your community in front of Virginia Tech students on the Blacksburg Housing homepage."),
         React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginTop: 20 } },
             [["Homepage placement", `${SPONSOR_OFFER.slots} slots, shown to every visitor and labeled Sponsored.`],
                 ["Fair to students", "Sponsorship never changes search results or the near-campus picks."],
@@ -1453,27 +1451,24 @@ function Advertise({ listings, onBack }) {
 }
 /* Privacy policy and terms. Written to match what the site actually does; review with
    someone qualified before relying on them, and update LEGAL_UPDATED when they change. */
-const LEGAL_UPDATED = "October 21, 2026";
+const LEGAL_UPDATED = "November 3, 2026";
 const LEGAL_PATHS = { "/privacy": "privacy", "/terms": "terms" };
 function LegalPage({ kind, onBack }) {
     const contact = CONTACT.inbox
         ? React.createElement("a", { href: `mailto:${CONTACT.inbox}`, style: { color: T.maroon, fontWeight: 700 } }, CONTACT.inbox)
-        : "the contact email listed on this site";
+        : null;
     const h = (t) => React.createElement("h2", { style: { fontSize: 20, fontWeight: 800, color: T.ink, margin: "28px 0 8px" } }, t);
     const p = (...c) => React.createElement("p", { style: { fontSize: 16, lineHeight: 1.65, color: T.ink, margin: "0 0 10px" } }, ...c);
     const li = (...c) => React.createElement("li", { style: { fontSize: 16, lineHeight: 1.6, color: T.ink, marginBottom: 6 } }, ...c);
     const ul = (...items) => React.createElement("ul", { style: { margin: "0 0 10px", paddingLeft: 22 } }, ...items);
     const privacy = [
-        p("Hokie Housing is an independent student project that helps people find off-campus housing near Virginia Tech. It is not affiliated with or endorsed by Virginia Tech. This policy explains what information the site handles and why."),
+        p("Blacksburg Housing is an independent student project that helps people find off-campus housing near Virginia Tech. It is not affiliated with or endorsed by Virginia Tech. This policy explains what information the site handles and why."),
         h("You can browse without an account"),
         p("Searching, viewing listings, the map and saving places do not require you to sign in or give us any personal information. There are no ad trackers or analytics scripts on the site."),
         h("Information stored on your device"),
         p("Saved places, compare lists and your contact history are stored in your browser’s local storage on your device. We don’t receive them. Clearing your browser data removes them."),
         h("When you message a property"),
-        p("If you use Request info or Request a tour, we ask for your name, your @vt.edu email, an optional phone number and your message. Depending on how the site is set up, either:"),
-        ul(li("we send your message to the property’s published leasing email on your behalf, with your email as the reply address, and email you a copy; or"),
-            li("we open a pre-filled draft in your own Gmail or mail app, and you choose whether to send it.")),
-        p("When we send it for you, the message passes through our email provider (Resend). We don’t keep a copy of your message on our servers, though our email provider keeps delivery records for a limited time. The property receives your name, email, any phone number you entered and your message, and their reply goes directly to you. How the property handles your information is up to them."),
+        p("If you use Request info or Request a tour, the details you enter are used in your browser to prepare a Gmail draft addressed to the property. We do not connect to your Gmail account, read your inbox or send that message through our server. You review the draft and choose whether to press Send in Gmail. Your browser’s contact history records the draft opening; it does not verify delivery."),
         p("If you choose Text or Call, your phone’s own messaging or calling app is used; nothing goes through us."),
         h("Search"),
         p("What you type in search is processed in your browser. If the optional AI search is turned on, the text of your search (nothing else about you) is sent to our server and to OpenAI to interpret it, and is not stored by OpenAI for training. Results are cached briefly in memory and then discarded."),
@@ -1489,12 +1484,12 @@ function LegalPage({ kind, onBack }) {
         h("Children"),
         p("The site is intended for college students and other adults. It is not directed to children under 13, and we don’t knowingly collect their information."),
         h("Changes and contact"),
-        p("If this policy changes, we’ll update the date below. Questions or requests to delete information: contact us at ", contact, "."),
+        p("If this policy changes, we’ll update the date below. ", contact ? React.createElement(React.Fragment, null, "Questions or requests to delete information: contact us at ", contact, ".") : "A site support address has not been published yet. Saved places and contact history can be removed by clearing this site’s browser data."),
     ];
     const terms = [
-        p("By using Hokie Housing you agree to these terms. If you don’t agree, please don’t use the site."),
+        p("By using Blacksburg Housing you agree to these terms. If you don’t agree, please don’t use the site."),
         h("What the site is"),
-        p("Hokie Housing is an independent student project, not affiliated with or endorsed by Virginia Tech. It gathers publicly available listing information to make housing near campus easier to search. We are not a landlord, broker or property manager, and we are not a party to any lease."),
+        p("Blacksburg Housing is an independent student project, not affiliated with or endorsed by Virginia Tech. It gathers publicly available listing information to make housing near campus easier to search. We are not a landlord, broker or property manager, and we are not a party to any lease."),
         h("Listing information may be wrong or out of date"),
         p("Rent, availability, photos, fees, amenities, eligibility (for example, whether undergraduates may rent) and commute times come from third-party sources or are estimates. They can be inaccurate or change at any time. Always confirm details directly with the property before you apply, sign or pay anything. Overviews, pros and cons, and answers from the housing assistant are generated automatically from listing data and are not advice."),
         h("Your messages to properties"),
@@ -1506,9 +1501,9 @@ function LegalPage({ kind, onBack }) {
         h("Accounts and shared features"),
         p("If accounts are enabled, you must use your own Virginia Tech account. Information you share with other students (like an interested-list entry) should be accurate and respectful; we may remove entries that aren’t."),
         h("Content and trademarks"),
-        p("Listing text and photos belong to their respective owners. If you own content on this site and want it corrected or removed, contact us at ", contact, " and we’ll respond promptly. Virginia Tech names and marks belong to Virginia Tech."),
+        p("Listing text and photos belong to their respective owners. ", contact ? React.createElement(React.Fragment, null, "For corrections or removal requests, contact us at ", contact, ".") : "A site support address for corrections and removal requests has not been published yet.", " Virginia Tech names and marks belong to Virginia Tech."),
         h("No warranty; limitation of liability"),
-        p("The site is provided “as is,” without warranties of any kind. To the extent the law allows, Hokie Housing and its creators aren’t liable for any loss arising from your use of the site, including decisions made based on listing information or dealings with landlords or other users."),
+        p("The site is provided “as is,” without warranties of any kind. To the extent the law allows, Blacksburg Housing and its creators aren’t liable for any loss arising from your use of the site, including decisions made based on listing information or dealings with landlords or other users."),
         h("Changes"),
         p("We may update these terms; the date below shows the latest version. Continuing to use the site means you accept the updated terms."),
     ];
@@ -1674,13 +1669,12 @@ function Explore({ saved, toggleSave, compare, toggleCompare, openListing, start
     const pool = listings || LISTINGS;
     const { parsed: understood, status: searchStatus } = useAISearch(q);
     const effective = useMemo(() => HousingSearch.compile({ ...understood.spec,
-        maxPrice: f.max < 9999 && understood.spec.rentBasis !== "unit" ? Math.min(f.max, understood.spec.maxPrice ?? Infinity) : understood.spec.maxPrice,
         minBeds: f.beds > 0 ? Math.max(f.beds, understood.spec.minBeds ?? 0) : understood.spec.minBeds,
-    }), [understood, f.max, f.beds]);
+    }, { maxPerPerson: f.max < 9999 ? f.max : null }), [understood, f.max, f.beds]);
     const results = useMemo(() => {
         const parsed = effective;
         // beds: a 1–4 bed community offers a 4-bed, so compare against its largest plan
-        const filtered = pool.filter((l) => l.price <= f.max && (f.beds === 0 || Math.max(l.beds || 0, l.bedsHigh || 0) >= f.beds) && l.walk <= f.walk &&
+        const filtered = pool.filter((l) => (f.walk >= 9999 || (l.walk != null && l.walk <= f.walk)) &&
             (!f.furnished || l.furnished) && (!f.utilities || l.utilities) && (!f.pets || l.pets) &&
             (f.bus === 0 || (l.busStop && l.busStop.walkMin <= f.bus)) && (f.lease === 0 || l.lease <= f.lease) &&
             (!f.audience || (f.audience === "unknown" ? l.eligibility?.undergrad == null : l.eligibility?.[f.audience] === true)) &&
@@ -1697,7 +1691,7 @@ function Explore({ saved, toggleSave, compare, toggleCompare, openListing, start
     useEffect(() => { setLimit(PAGE); }, [f, q, sort]);
     const shown = results.slice(0, limit);
     const mapListings = useMemo(() => results.map(l => {
-        const hasPlanCriteria = [effective.spec.minBeds, effective.spec.maxBeds, effective.spec.minPrice, effective.spec.maxPrice, effective.spec.minBaths].some(v => v !== null);
+        const hasPlanCriteria = effective.hasPlanCriteria;
         const prices = hasPlanCriteria ? effective.matchingPlans(l).map(p => p.price).filter(p => p > 0) : [];
         return { ...l, mapPrice: prices.length ? Math.min(...prices) : l.price };
     }), [results, effective]);
@@ -1763,7 +1757,7 @@ function Explore({ saved, toggleSave, compare, toggleCompare, openListing, start
             React.createElement("section", { className: "hk-results-list", "aria-label": "Housing results" },
                 React.createElement("h1", { role: "status", style: { fontSize: 18, lineHeight: 1.3, fontWeight: 650, margin: "0 0 14px" } }, results.length.toLocaleString(), " place", results.length === 1 ? "" : "s", " found"),
                 React.createElement("div", { className: "hk-results-cards" },
-            shown.map((l) => React.createElement(ListingCard, { key: l.id, l: l, saved: saved.includes(l.id), onSave: toggleSave, compared: compare.includes(l.id), onCompare: toggleCompare, onOpen: openListing, bedsWanted: bedsWanted, interestedCount: (interests[l.id] || []).length, matchingPlans: [effective.spec.minBeds, effective.spec.maxBeds, effective.spec.minPrice, effective.spec.maxPrice, effective.spec.minBaths].some(v => v !== null) ? effective.matchingPlans(l) : null })),
+            shown.map((l) => React.createElement(ListingCard, { key: l.id, l: l, saved: saved.includes(l.id), onSave: toggleSave, compared: compare.includes(l.id), onCompare: toggleCompare, onOpen: openListing, bedsWanted: bedsWanted, interestedCount: (interests[l.id] || []).length, matchingPlans: effective.hasPlanCriteria ? effective.matchingPlans(l) : null })),
             results.length > shown.length && React.createElement("button", { className: "hk-btn", onClick: () => setLimit((v) => v + PAGE), style: { ...S.ghost, gridColumn: "1/-1", justifySelf: "center", padding: "12px 26px" } }, `Show more (${results.length - shown.length} left)`),
             results.length === 0 && React.createElement("div", { style: { ...S.card, padding: 28, gridColumn: "1/-1", textAlign: "center", color: T.sub, fontSize: 16 } }, "No listings match all of those requirements. Try changing your commute, budget, or eligibility filter.")),
         )),
@@ -1799,7 +1793,7 @@ function Subleases({ startMessage, userName, focusId, onFocusHandled }) {
     const [form, setForm] = useState({ place: "", price: "", dates: "", note: "" });
     const [highlightId, setHighlightId] = useState(null);
     const cardRefs = useRef({});
-    // Deep-link from HokieBot: scroll the matching card into view and flash a highlight ring.
+    // Deep-link from Housing assistant: scroll the matching card into view and flash a highlight ring.
     useEffect(() => {
         if (focusId == null)
             return;
@@ -2238,7 +2232,7 @@ function Roommates({ startMessage, isPro, onOpenPro }) {
                     React.createElement("button", { className: "hk-btn", onClick: () => startMessage(m.name), style: { fontSize: 16, fontWeight: 700, color: T.maroon, background: T.maroonSoft, padding: "7px 13px", borderRadius: 99 } }, "Say hi")))),
                 React.createElement("div", { style: { ...S.card, padding: 16, marginTop: 10, background: `linear-gradient(135deg, ${T.maroonSoft}, ${T.orangeSoft})`, border: "none" } },
                     React.createElement("div", { style: { fontWeight: 800, fontSize: 16, color: T.maroon } },
-                        "Hokie Pro",
+                        "Housing Pro",
                         isPro && " · You're a member"),
                     React.createElement("p", { style: { fontSize: 16, color: T.sub, margin: "5px 0 0", lineHeight: 1.55 } }, "Advanced matching filters (major, lifestyle, \u00B15% score precision), unlimited swipes, and early alerts when listings in your budget drop. $4/mo, cancel anytime."),
                     !isPro && React.createElement("button", { className: "hk-btn", onClick: onOpenPro, style: { marginTop: 10, fontSize: 16, fontWeight: 800, color: "#fff", background: `linear-gradient(135deg,${T.maroon},${T.orange})`, padding: "8px 14px", borderRadius: 99 } }, "Upgrade to Pro"))))));
@@ -2358,26 +2352,24 @@ function Messages({ convos, activeId, setActiveId, sendMsg, markRead }) {
    confirm that a message was sent or a call completed. */
 function ContactHistory({ sent, onOpenListing, onRemove }) {
     const [open, setOpen] = useState({});
-    const contactLink = m => m.contactUrl || gmailCompose(m.to, m.subject || "", m.body || "");
-    const kindLabel = { inquiry: "Gmail draft opened", tour: "Tour draft opened", person: "Student draft opened", phone: "Phone opened", website: "Website opened" };
-    const kindTone = { inquiry: "maroon", tour: "gold", person: "blue", phone: "blue", website: "faint" };
+    const contactLink = HousingContacts.contactUrl;
     return (React.createElement("div", null,
         React.createElement("h2", { style: S.h2 }, "Contact history"),
-        React.createElement("div", { style: S.sub }, "Property contacts you opened from this device. Drafts and calls are not confirmed as sent or completed."),
+        React.createElement("div", { style: S.sub }, "Your contact activity on this device."),
         sent.length === 0 && React.createElement("div", { style: { ...S.card, padding: 28, marginTop: 16, textAlign: "center", color: T.sub, fontSize: 16 } }, "No contacts yet. Open a place and choose ", React.createElement("b", null, "Request info"), " to start."),
         React.createElement("div", { style: { display: "grid", gap: 10, marginTop: 16 } }, sent.map((m) => (React.createElement("div", { key: m.id, className: "hk-fade", style: { ...S.card, padding: "14px 16px" } },
             React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, flexWrap: "wrap" } },
                 React.createElement("div", { style: { minWidth: 0 } },
                     React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" } },
-                        React.createElement(Badge, { tone: kindTone[m.kind] || "blue" }, kindLabel[m.kind] || "Contact opened"),
+                        React.createElement("span", { title: HousingContacts.describe(m).detail }, React.createElement(Badge, { tone: HousingContacts.describe(m).tone }, HousingContacts.describe(m).label)),
                         React.createElement("span", { style: { fontWeight: 800, fontSize: 16.5, color: T.ink } }, m.toLabel || m.to)),
                     React.createElement("div", { style: { fontSize: 16, color: T.sub, marginTop: 3 } },
                         m.listingName && !(m.toLabel || "").includes(m.listingName) && React.createElement(React.Fragment, null, m.listingName, m.unit ? ` \u00B7 ${m.unit}` : "", " \u00B7 "),
                         m.to ? `to ${m.to} \u00B7 ` : "",
                         timeAgo(m.at), m.via ? ` \u00B7 ${m.via}` : "")),
-                React.createElement("div", { style: { display: "flex", gap: 6, flexShrink: 0 } },
+                React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", minWidth: 0 } },
                     m.listingId && React.createElement("button", { className: "hk-btn", onClick: () => onOpenListing(m.listingId), style: { ...S.ghost, padding: "7px 12px", fontSize: 16 } }, "Open listing"),
-                    React.createElement("a", { href: contactLink(m), target: "_blank", rel: "noopener", className: "hk-btn", style: { ...S.ghost, padding: "7px 12px", fontSize: 16, textDecoration: "none" } }, m.kind === "phone" ? "Call again" : m.kind === "website" ? "Open website" : "Open Gmail draft"),
+                    contactLink(m) && React.createElement("a", { href: contactLink(m), target: "_blank", rel: "noopener", className: "hk-btn", style: { ...S.ghost, padding: "7px 12px", fontSize: 16, textDecoration: "none" } }, HousingContacts.describe(m).action),
                     React.createElement("button", { className: "hk-btn", onClick: () => onRemove(m.id), "aria-label": "Remove", title: "Remove from history", style: { ...S.ghost, padding: "7px 10px", fontSize: 16, color: T.faint } }, "\u00D7"))),
             React.createElement("div", { style: { marginTop: 10, fontSize: 16, color: T.ink, lineHeight: 1.55, whiteSpace: "pre-line", ...(open[m.id] ? {} : { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }) } }, m.body),
             (m.body || "").length > 140 && React.createElement("button", { className: "hk-btn", onClick: () => setOpen({ ...open, [m.id]: !open[m.id] }), style: { background: "transparent", color: T.maroon, fontWeight: 700, fontSize: 16, padding: "4px 0" } }, open[m.id] ? "Show less" : "Show full message")))))));
@@ -2437,7 +2429,7 @@ function Admin() {
                     React.createElement("div", { style: { display: "flex", alignItems: "flex-end", gap: 10, height: 110, marginTop: 14 } }, REVENUE.map((r) => (React.createElement("div", { key: r.m, style: { flex: 1, textAlign: "center" } },
                         React.createElement("div", { style: { height: `${(r.v / maxV) * 88}px`, background: r.m === "Jun" ? `linear-gradient(180deg,${T.orange},${T.maroon})` : "rgba(134,31,65,.32)", borderRadius: "6px 6px 2px 2px", transition: "height .4s ease" } }),
                         React.createElement("div", { style: { fontSize: 16, fontWeight: 700, color: T.faint, marginTop: 5 } }, r.m))))),
-                    React.createElement("div", { style: { fontSize: 16, color: T.sub, marginTop: 8 } }, "Landlord featured slots: $6.1k \u00B7 Hokie Pro: $2.3k")),
+                    React.createElement("div", { style: { fontSize: 16, color: T.sub, marginTop: 8 } }, "Landlord featured slots: $6.1k \u00B7 Housing Pro: $2.3k")),
                 React.createElement("div", { style: { ...S.card, padding: 18 } },
                     React.createElement("div", { style: { fontWeight: 800, fontSize: 16.5 } }, "Moderation"),
                     [["AI assistant escalations awaiting a human", 2, "gold"], ["Reported messages", 1, "maroon"], ["Review disputes", 0, "green"]].map(([k, n, tone]) => (React.createElement("div", { key: k, style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderBottom: `1px solid ${T.line}`, fontSize: 16, color: T.sub } },
@@ -2454,7 +2446,10 @@ function aiKeyword(name) {
     return words[0] || null;
 }
 // Only named places (not address-titled "3 bed house" listings) count as a name lookup.
-const AI_NAME_KEYS = LISTINGS.filter((l) => !l.genericName && !l.parentId).map((l) => ({ l, key: aiKeyword(l.name) })).filter((x) => x.key);
+const isCommunity = l => !l.sublet && !l.shared && (l.plans || []).length >= 3;
+const AI_NAME_KEYS = LISTINGS.filter((l) => !l.genericName && !l.parentId)
+    .sort((a, b) => Number(isCommunity(b)) - Number(isCommunity(a)))
+    .map((l) => ({ l, key: aiKeyword(l.name) })).filter((x) => x.key);
 const AI_AMENITY_TESTS = [
     { re: /\bgym\b|fitness/, label: "gym/fitness", match: /gym|fitness/i },
     { re: /\bpool\b/, label: "pool", match: /pool/i },
@@ -2467,7 +2462,7 @@ const AI_AMENITY_TESTS = [
 ];
 /* Ask about ONE listing: answers from the record itself (plans, availability, bus,
    amenities, reviews, contact). Returns null when it can't, so the UI can hand the
-   question to the main HokieBot instead. */
+   question to the main Housing assistant instead. */
 function answerAbout(l, q) {
     const s = (q || "").toLowerCase();
     const has = (...ws) => ws.some((w) => s.includes(w));
@@ -2543,7 +2538,7 @@ function answerAbout(l, q) {
     if (words.length && am.length) return `Not listed under amenities. What it does list: ${am.slice(0, 8).join(", ")}${am.length > 8 ? "…" : ""}.`;
     return null;
 }
-/* Shared natural-language parser for the Explore search bar and HokieBot.
+/* Shared natural-language parser for the Explore search bar and Housing assistant.
    "apartments near campus under 900" -> facets [apartment, near campus, under $900],
    a filter for the listing pool, an optional sort, and `text` = whatever words were
    left over (used as a name/area search, so "hub under 900" still means Hub). */
@@ -2646,14 +2641,14 @@ function answerAI(q, openListing, interpretation = null) {
     return { text: `Looking for ${facets.join(", ")}. Here ${top.length === 1 ? "is my pick" : "are my top picks"}:`, picks: top };
 }
 // A bare follow-up like "show me those" / "show that one" / "open it" refers back to
-// whatever HokieBot just recommended — it's not a new, unmatched search, so it must
+// whatever Housing assistant just recommended — it's not a new, unmatched search, so it must
 // never fall into the "I can't answer that confidently" human-handoff path.
 const RECALL_RE = /^(?:ok[,.]?\s*|yes[,.]?\s*|yeah[,.]?\s*|sure[,.]?\s*)*(?:can (?:i|you)\s+|please\s+|could you\s+)*(?:show|see|view|open|pull up|bring up|take me to|let me see)\b\s*(?:me|us)?\s*(?:that one|those ones|those|that|these|them|it)?\s*$/i;
 function AIAssistant({ open, setOpen, openListing, goToSublease, prefill, onPrefillUsed }) {
     const [msgs, setMsgs] = useState([{ me: false, text: "Hi! I'm your housing assistant. What can I help you with today? I can find listings by budget, bedrooms, drive or walk time to campus, or student eligibility, find sublets in the saved catalog, or pull up reviews for a specific place." }]);
     const [draft, setDraft] = useState("");
     const [thinking, setThinking] = useState(false);
-    // What HokieBot most recently recommended, so a follow-up like "show me those" can
+    // What Housing assistant most recently recommended, so a follow-up like "show me those" can
     // hand the same option(s) back instead of treating it as a fresh, unmatched query.
     const [lastPicks, setLastPicks] = useState([]);
     const [lastSubPick, setLastSubPick] = useState(null);
@@ -2705,13 +2700,12 @@ function AIAssistant({ open, setOpen, openListing, goToSublease, prefill, onPref
         }, 700);
     };
     return (React.createElement(React.Fragment, null,
-        React.createElement("button", { className: "hk-btn hk-ai-launcher", onClick: () => setOpen(!open), "aria-label": "AI housing assistant", style: { position: "fixed", right: 20, bottom: 20, zIndex: 70, width: 58, height: 58, borderRadius: 99, background: T.maroon, color: "#fff", boxShadow: "0 6px 20px rgba(134,31,65,.35)", display: "grid", placeItems: "center" } }, open ? React.createElement(Icon, { name: "x", size: 22 }) : React.createElement(HokieBird, { size: 30 })),
-        open && (React.createElement("div", { className: "hk-fade hk-ai-panel", style: { position: "fixed", right: 20, bottom: 88, zIndex: 70, width: "min(380px, calc(100vw - 40px))", height: "min(520px, 70vh)", background: "#fff", borderRadius: 18, boxShadow: "0 20px 60px rgba(36,27,31,.25)", display: "flex", flexDirection: "column", overflow: "hidden", border: `1px solid ${T.line}` } },
+        open && (React.createElement("div", { className: "hk-fade hk-ai-panel", style: { position: "fixed", right: 20, bottom: 20, zIndex: 70, width: "min(380px, calc(100vw - 40px))", height: "min(520px, 70vh)", background: "#fff", borderRadius: 18, boxShadow: "0 20px 60px rgba(36,27,31,.25)", display: "flex", flexDirection: "column", overflow: "hidden", border: `1px solid ${T.line}` } },
             React.createElement("div", { style: { position: "relative", padding: "14px 16px", background: `linear-gradient(135deg,${T.maroon},${T.maroonDeep})`, color: "#fff" } },
-                React.createElement("button", { className: "hk-btn hk-mobile-only", "aria-label": "Close housing assistant", onClick: () => setOpen(false), style: { position: "absolute", right: 10, top: 10, width: 44, height: 44, padding: 10, background: "transparent", color: "white", alignItems: "center", justifyContent: "center" } }, React.createElement(Icon, { name: "x", size: 24 })),
+                React.createElement("button", { className: "hk-btn", "aria-label": "Close housing assistant", onClick: () => setOpen(false), style: { position: "absolute", right: 10, top: 10, width: 44, height: 44, padding: 10, background: "transparent", color: "white", alignItems: "center", justifyContent: "center" } }, React.createElement(Icon, { name: "x", size: 24 })),
                 React.createElement("div", { style: { fontWeight: 800, fontSize: 17, display: "flex", alignItems: "center", gap: 8 } },
-                    React.createElement(HokieBird, { size: 22 }),
-                    "HokieBot"),
+                    React.createElement(HousingMark, { size: 22 }),
+                    "Housing assistant"),
                 React.createElement("div", { style: { fontSize: 16, opacity: 0.85, marginTop: 2 } }, "Answers from current listings")),
             React.createElement("div", { className: "hk-scroll hk-chat-messages", style: { flex: 1, overflowY: "auto", padding: 14, display: "flex", flexDirection: "column", gap: 8, background: T.paper } },
                 msgs.map((m, i) => {
@@ -2746,7 +2740,7 @@ function AIAssistant({ open, setOpen, openListing, goToSublease, prefill, onPref
                                 m.subPick.poster,
                                 " \u00B7 tap to view in Subleases \u2192")))));
                 }),
-                thinking && React.createElement("div", { style: { fontSize: 16, color: T.faint, animation: "pulse 1.2s infinite" } }, "HokieBot is searching listings\u2026"),
+                thinking && React.createElement("div", { style: { fontSize: 16, color: T.faint, animation: "pulse 1.2s infinite" } }, "Housing assistant is searching listings\u2026"),
                 React.createElement("div", { ref: endRef })),
             React.createElement("div", { style: { padding: 10, borderTop: `1px solid ${T.line}` } },
                 React.createElement("div", { className: "hk-scroll", style: { display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8 } }, ["5 min drive from campus", "Undergrad-friendly under $1000", "Pet friendly with a pool", "Cheapest furnished places"].map((sug) => (React.createElement("button", { key: sug, className: "hk-btn", onClick: () => ask(sug), style: { fontSize: 16, fontWeight: 700, whiteSpace: "nowrap", background: T.stone, color: T.sub, borderRadius: 99, padding: "6px 11px" } }, sug)))),
@@ -2792,7 +2786,7 @@ function LoginGate({ onLogin, knownAccounts, onRegister }) {
     return (React.createElement("div", { style: { minHeight: "100vh", background: T.paper, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif", padding: 20, boxSizing: "border-box" } },
         React.createElement("style", null, css),
         React.createElement("div", { className: "hk-fade", style: { ...S.card, width: "min(400px, 100%)", padding: 30, textAlign: "center", boxSizing: "border-box" } },
-            React.createElement("div", { style: { fontWeight: 900, fontSize: 28, letterSpacing: "-0.035em", color: T.maroon, lineHeight: 1, marginBottom: 14 } }, "hokie", React.createElement("span", { style: { color: T.ink } }, "housing")),
+            React.createElement("div", { style: { fontWeight: 900, fontSize: 28, letterSpacing: "-0.035em", color: T.maroon, lineHeight: 1, marginBottom: 14 } }, "blacksburg", React.createElement("span", { style: { color: T.ink } }, "housing")),
             React.createElement("h1", { style: { fontSize: 19, fontWeight: 800, color: T.ink, margin: 0, letterSpacing: "-0.01em" } }, "Welcome"),
             React.createElement("p", { style: { fontSize: 16, color: T.sub, marginTop: 6, lineHeight: 1.5 } }, mode === "signup"
                 ? (signupRole === "Landlord" ? "Create a landlord account to list properties and manage student inquiries." : "Create an account with your VT email to find listings, message landlords, and post subleases.")
@@ -2810,7 +2804,7 @@ function LoginGate({ onLogin, knownAccounts, onRegister }) {
             React.createElement("form", { onSubmit: (e) => { e.preventDefault(); submit(); }, style: { display: "grid", gap: 12, marginTop: 18, textAlign: "left" } },
                 mode === "signup" && (React.createElement("div", null,
                     React.createElement("label", { style: { fontSize: 16, fontWeight: 700, color: T.sub } }, "Full name"),
-                    React.createElement("input", { value: name, onChange: (e) => setName(e.target.value), placeholder: "Hokie Bird", autoComplete: "name", style: { width: "100%", marginTop: 4, padding: "11px 14px", borderRadius: 10, border: inputBorder(!validName), fontSize: 16, fontFamily: "inherit", boxSizing: "border-box" } }))),
+                    React.createElement("input", { value: name, onChange: (e) => setName(e.target.value), placeholder: "Your name", autoComplete: "name", style: { width: "100%", marginTop: 4, padding: "11px 14px", borderRadius: 10, border: inputBorder(!validName), fontSize: 16, fontFamily: "inherit", boxSizing: "border-box" } }))),
                 React.createElement("div", null,
                     React.createElement("label", { style: { fontSize: 16, fontWeight: 700, color: T.sub } }, needsEdu ? "VT email" : "Email"),
                     React.createElement("input", { value: email, onChange: (e) => setEmail(e.target.value), autoComplete: "email", placeholder: needsEdu ? "you@vt.edu" : "you@example.com", type: "email", style: { width: "100%", marginTop: 4, padding: "11px 14px", borderRadius: 10, border: inputBorder(!validEmail), fontSize: 16, fontFamily: "inherit", boxSizing: "border-box" } }),
@@ -2841,10 +2835,10 @@ function HokieProModal({ open, onClose, onSubscribe, onCancelPlan, isPro }) {
         React.createElement("div", { onClick: (e) => e.stopPropagation(), style: { ...S.card, width: "min(420px, 100%)", padding: 26, position: "relative", boxSizing: "border-box" } },
             React.createElement("button", { className: "hk-btn", onClick: onClose, "aria-label": "Close", style: { position: "absolute", top: 14, right: 14, width: 28, height: 28, borderRadius: 99, background: T.stone, fontSize: 16 } }, "\u00D7"),
             React.createElement("div", { style: { width: 48, height: 48, borderRadius: 14, background: T.maroon, display: "grid", placeItems: "center", color: "#fff", marginBottom: 12 } }, React.createElement(Icon, { name: "bolt", size: 24 })),
-            React.createElement("div", { style: { fontWeight: 900, fontSize: 21, color: T.ink } }, "Hokie Pro"),
+            React.createElement("div", { style: { fontWeight: 900, fontSize: 21, color: T.ink } }, "Housing Pro"),
             isPro ? (React.createElement(React.Fragment, null,
-                React.createElement("p", { style: { fontSize: 16, color: T.sub, marginTop: 4, lineHeight: 1.5 } }, "You're a Pro member, thanks for supporting Hokie Housing."),
-                React.createElement("button", { className: "hk-btn", style: { ...S.ghost, width: "100%", marginTop: 16 }, onClick: onCancelPlan }, "Cancel Hokie Pro"))) : (React.createElement(React.Fragment, null,
+                React.createElement("p", { style: { fontSize: 16, color: T.sub, marginTop: 4, lineHeight: 1.5 } }, "You're a Pro member, thanks for supporting Blacksburg Housing."),
+                React.createElement("button", { className: "hk-btn", style: { ...S.ghost, width: "100%", marginTop: 16 }, onClick: onCancelPlan }, "Cancel Housing Pro"))) : (React.createElement(React.Fragment, null,
                 React.createElement("p", { style: { fontSize: 16, color: T.sub, marginTop: 4, lineHeight: 1.5 } }, "Get more out of your housing search."),
                 React.createElement("div", { style: { display: "grid", gap: 8, marginTop: 16 } }, perks.map((p) => (React.createElement("div", { key: p, style: { display: "flex", gap: 8, fontSize: 16, color: T.ink, lineHeight: 1.4 } },
                     React.createElement(Icon, { name: "check", size: 15, style: { color: T.green, marginTop: 2 } }),
@@ -2940,13 +2934,13 @@ function HokieHousing() {
         setUser((u) => ({ ...u, pro: true }));
         setKnownAccounts((k) => ({ ...k, [user.email]: { ...(k[user.email] || user), pro: true } }));
         setProModalOpen(false);
-        notify(`Welcome to Hokie Pro (${plan === "annual" ? "annual" : "monthly"} plan)`);
+        notify(`Welcome to Housing Pro (${plan === "annual" ? "annual" : "monthly"} plan)`);
     };
     const cancelPro = () => {
         setUser((u) => ({ ...u, pro: false }));
         setKnownAccounts((k) => ({ ...k, [user.email]: { ...(k[user.email] || user), pro: false } }));
         setProModalOpen(false);
-        notify("Hokie Pro canceled");
+        notify("Housing Pro canceled");
     };
     const toggleSave = (id) => setSaved((s) => { const on = s.includes(id); if (!on)
         notify("Saved"); return on ? s.filter((x) => x !== id) : [...s, id]; });
@@ -3002,29 +2996,33 @@ function HokieHousing() {
         loadInterests();
     };
     // Sent history: [{id, at, kind: inquiry|tour|person, to, toLabel, listingId, listingName, unit, subject, body, via}]
-    const [sent, setSent] = usePersistentState("sent_messages", []);
-    const logSent = (m) => setSent((xs) => [{ id: Date.now() + Math.random(), at: new Date().toISOString(), ...m }, ...xs].slice(0, 200));
+    const [storedSent, setSent] = usePersistentState("sent_messages", []);
+    const sent = useMemo(() => HousingContacts.rows(storedSent), [storedSent]);
+    useEffect(() => { setSent(xs => HousingContacts.rows(xs)); }, []);
+    const logSent = (m) => setSent(xs => HousingContacts.rows([{ id: Date.now() + Math.random(), at: new Date().toISOString(), ...m }, ...xs]).slice(0, 200));
     // Emailing an interested student: opens their mail app with a starter note, logs it here.
     const messagePerson = (p, l) => {
         if (!p.email) {
             notify("This profile has no email to reach");
             return;
         }
-        const subject = l ? `Roommates at ${l.name}? (via Hokie Housing)` : "Hey from Hokie Housing";
+        const subject = l ? `Roommates at ${l.name}? (via Blacksburg Housing)` : "Hey from Blacksburg Housing";
         const body = `Hi ${p.name.split(" ")[0]}! I saw you're interested in ${l ? l.name : "the same place"} too. I'm ${user.name}${p.roommates ? " and also looking for roommates" : ""}. Want to compare notes?\n\n${user.name} \u00B7 ${user.email}`;
         window.open(gmailCompose(p.email, subject, body), "_blank", "noopener");
         logSent({ kind: "person", to: p.email, toLabel: p.name, listingId: l ? l.id : null, listingName: l ? l.name : null, subject, body, via: "Gmail" });
         notify(`Opened a Gmail draft to ${p.name}`);
     };
-    const recordContact = (l, kind, contactUrl, unit = null) => {
-        logSent({ kind, contactUrl, to: kind === "phone" ? l.phone : "", toLabel: l.manager || l.name,
+    const recordContact = (l, kind, contactUrl, unit = null, body = "") => {
+        const transport = kind === "text" ? "sms" : kind === "phone" ? "phone" : "website";
+        logSent({ kind, transport, outcome: "opened", contactUrl, to: kind === "phone" || kind === "text" ? l.phone : "", toLabel: l.manager || l.name,
             listingId: l.id, listingName: l.name, unit: unit?.label || null,
-            body: kind === "phone" ? `Opened a call to ${l.phone}${unit ? ` about ${unit.label}` : ""}.` : `Opened the property's contact website${unit ? ` about ${unit.label}` : ""}.`,
-            via: kind === "phone" ? "Phone" : "Website" });
+            body: body || (kind === "phone" ? `Opened a call to ${l.phone}${unit ? ` about ${unit.label}` : ""}.` : "Opened the property's contact website."),
+            via: kind === "text" ? "Text" : kind === "phone" ? "Phone" : "Website" });
     };
     const recordInquiry = (l, kind, body, note, extra = {}) => {
-        logSent({ kind: kind === "tour" ? "tour" : "inquiry", to: extra.to || l.email || CONTACT.inbox || "", toLabel: l.manager || l.name, listingId: l.id, listingName: l.name, unit: extra.unit || null, subject: extra.subject || "", body, via: extra.via || "Gmail" });
-        notify("Email draft opened");
+        const entry = HousingContacts.normalize({ kind: kind === "tour" ? "tour" : "inquiry", to: extra.to || l.email || "", toLabel: l.manager || l.name, listingId: l.id, listingName: l.name, unit: extra.unit || null, subject: extra.subject || "", body, ...extra });
+        logSent(entry);
+        notify(HousingContacts.describe(entry).toast);
     };
     const recordInquiryLegacy = (l, kind, body, note) => {
         const name = l.manager ? `${l.name} (${l.manager})` : l.name;
@@ -3061,8 +3059,8 @@ function HokieHousing() {
         React.createElement("header", { style: { position: "sticky", top: 0, zIndex: 50, background: "rgba(255,255,255,.96)", backdropFilter: "blur(10px)", borderBottom: `1px solid ${T.line}` } },
             React.createElement("div", { className: "hk-header-inner", style: { maxWidth: "none", margin: "0 auto", padding: "0 28px" } },
                 React.createElement("div", { className: "hk-header-row", style: { display: "flex", alignItems: "center", justifyContent: "space-between", height: 72, gap: 12 } },
-                    React.createElement("div", { style: { cursor: "pointer", fontWeight: 900, fontSize: 21, letterSpacing: "-0.035em", color: T.maroon, lineHeight: 1, whiteSpace: "nowrap" }, onClick: () => { setTab(tabs[0][0]); setDetail(null); window.scrollTo(0, 0); } },
-                        "hokie",
+                    React.createElement("button", { type: "button", className: "hk-btn hk-brand", "aria-label": "Blacksburg Housing home", style: { background: "transparent", padding: 0, cursor: "pointer", fontWeight: 900, fontSize: 21, letterSpacing: "-0.035em", color: T.maroon, lineHeight: 1, whiteSpace: "nowrap" }, onClick: () => { setTab(tabs[0][0]); setDetail(null); window.scrollTo(0, 0); } },
+                        "blacksburg",
                         React.createElement("span", { style: { color: T.ink } }, "housing")),
                     BACKEND_READY && React.createElement("div", { className: "hk-desktop-only", style: { order: 3, marginLeft: 8 } }, account
                         ? React.createElement("button", { className: "hk-btn", onClick: signOut, title: account.email, style: { ...S.ghost, padding: "8px 14px", fontSize: 15 } }, "Sign out")
@@ -3089,9 +3087,9 @@ function HokieHousing() {
             tab === "advertise" && CONTACT.inbox && React.createElement(Advertise, { listings: allListings, onBack: () => { setTab("home"); window.scrollTo(0, 0); } }),
             (tab === "privacy" || tab === "terms") && React.createElement(LegalPage, { kind: tab, onBack: () => { setTab("home"); window.scrollTo(0, 0); } })),
         React.createElement("footer", { style: { display: !detail && tab === "explore" && role !== "Landlord" ? "none" : undefined, borderTop: `1px solid ${T.line}`, marginTop: 8 } },
-            React.createElement("div", { style: { maxWidth: 1400, margin: "0 auto", padding: "22px 96px 34px 18px", display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 14 } },
+            React.createElement("div", { style: { maxWidth: 1400, margin: "0 auto", padding: "22px 18px 34px", display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 14 } },
                 React.createElement("div", { style: { fontSize: 13.5, color: T.faint, lineHeight: 1.6, maxWidth: 640 } },
-                    React.createElement("b", { style: { color: T.sub } }, "Hokie Housing"),
+                    React.createElement("b", { style: { color: T.sub } }, "Blacksburg Housing"),
                     " is an independent student project, not affiliated with Virginia Tech. Confirm price and availability with the property."),
                 React.createElement("nav", { "aria-label": "Site information", style: { fontSize: 13.5, color: T.faint, display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" } },
                     [["privacy", "Privacy"], ["terms", "Terms"], ...(CONTACT.inbox ? [["advertise", "For property managers"]] : [])].map(([k, label]) => React.createElement("button", { key: k, className: "hk-btn", onClick: () => { setTab(k); setDetail(null); window.scrollTo(0, 0); }, style: { background: "transparent", color: T.sub, fontWeight: 600, fontSize: 13.5, padding: 0, minHeight: 0, textDecoration: "underline" } }, label)),

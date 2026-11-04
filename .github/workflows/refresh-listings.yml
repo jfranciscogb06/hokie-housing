@@ -19,6 +19,9 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -34,7 +37,7 @@ jobs:
         working-directory: scraper
         run: python scrape.py --remote-photos --details ${{ inputs.details }}
       - name: Test the new catalog
-        run: npm test
+        run: npm test && npm run check:catalog
       - name: Commit if changed
         run: |
           git add data/listings.js data/listings.json data/amenities.json data/bt_stops.json

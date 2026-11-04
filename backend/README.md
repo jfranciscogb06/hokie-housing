@@ -37,3 +37,9 @@ editing/deleting someone else's entry are all rejected.
 A student's name and the details they enter are shown to other signed-in VT students on
 listings they joined; their email only with the opt-in. The page says this before they add themselves. Removing yourself deletes the row.
 Deleting the auth user deletes their entries (`on delete cascade`).
+
+## Property contact is independent of accounts
+
+Property inquiries always open a prefilled Gmail draft. No Supabase, Resend or
+Google account connection is needed. Students press Send in Gmail themselves.
+The old mail handler is not imported by the live server, and `/api/message` returns 410.

@@ -8,7 +8,10 @@ test("generic unit names become the street address; named places keep their name
     assert.equal(Catalog.isGenericName("Hub Blacksburg"), false);
     assert.equal(Catalog.isGenericName("Turner NW - Steps from Campus"), false);
     const renamed = listings.filter(l => l.genericName);
-    assert(renamed.length > 100);
+    assert(renamed.length > 0);
+    const fixture = Catalog.normalize([{ id: 'generic', name: '3 Bedroom Townhouse', address: '123 Main Street, Blacksburg, VA', photos: [], plans: [] }]);
+    assert.equal(fixture[0].name, '123 Main Street');
+    assert.equal(fixture[0].listingName, '3 Bedroom Townhouse');
     assert(renamed.every(l => /\d/.test(l.name) && l.listingName && !Catalog.isGenericName(l.name)));
     // The original wording stays searchable.
     const p = Search.local("townhouse");

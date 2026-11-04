@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 const fs = require('node:fs'), path = require('node:path'), crypto = require('node:crypto');
 const Sponsors = require('../sponsorships');
-const root = path.join(__dirname, '..'), file = path.join(root, 'sponsorships/campaigns.json');
+const root = path.join(__dirname, '..');
+const { storagePaths, ensureCampaigns } = require('../storage');
+const storage = ensureCampaigns(storagePaths()), file = storage.campaignsPath;
 const [command = 'list', id, ...args] = process.argv.slice(2);
 const help = `Homepage sponsorships (operator tool; no public write endpoint):\n  npm run sponsors -- list\n  npm run sponsors -- add LISTING_ID --advertiser "Property manager" [--photo CATALOG_PHOTO]\n  npm run sponsors -- activate CAMPAIGN_ID --days 30\n  npm run sponsors -- pause CAMPAIGN_ID\n  npm run sponsors -- stats\n\nCreate a draft, arrange payment directly, then activate its placement. Dates are stored in UTC.\nLocal preview: http://localhost:8788/?previewSponsors=1\n`;
 function option(name) { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : null; }
@@ -9,7 +11,7 @@ try {
     if (['help', '--help', '-h'].includes(command)) { console.log(help); process.exit(0); }
     let campaigns = Sponsors.readCampaigns(file);
     if (command === 'list') console.table(campaigns.map(c => ({ id: c.id, advertiser: c.advertiser, listing: c.listingId, status: c.status === 'active' && Date.parse(c.endsAt) <= Date.now() ? 'expired' : c.status, starts: c.startsAt || '—', ends: c.endsAt || '—' })));
-    else if (command === 'stats') { console.table(Sponsors.summary(path.join(root, '.local/sponsor-stats.json'))); console.log('90-day aggregate placement views and profile clicks; these are not unique visitors.'); }
+    else if (command === 'stats') { console.table(Sponsors.summary(storage.statsPath)); console.log('90-day aggregate placement views and profile clicks; these are not unique visitors.'); }
     else if (command === 'add') {
         const advertiser = option('--advertiser');
         const catalog = JSON.parse(fs.readFileSync(path.join(root, 'data/listings.json'), 'utf8')).listings;

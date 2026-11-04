@@ -1,8 +1,8 @@
-# Hokie Housing
+# Blacksburg Housing
 
-Off-campus housing for Virginia Tech students: every listing near campus, real photos,
-natural-language search, floor plans, bus stops, and a way to find other students
-interested in the same place.
+A student-built off-campus housing search for Blacksburg: listing photos,
+natural-language search, floor plans, bus stops, saved places and Gmail contact drafts.
+Browsing is public. Accounts and shared roommate features remain hidden until configured.
 
 ## Run it
 
@@ -108,8 +108,10 @@ See [scraper/README.md](scraper/README.md) for how it works and the options.
 
 1. render.com > New > Blueprint > pick this repo. `render.yaml` defines one Node web
    service plus a 1GB disk for sponsorship metrics.
-2. In the service's Environment tab, set `RESEND_API_KEY` + `MAIL_FROM` (direct
-   messages to properties) and `OPENAI_API_KEY` (optional; built-in search works without it).
+2. Contacting properties needs no mail provider or Google account integration. Students
+   review and send their own prefilled Gmail drafts. Set `SUPPORT_EMAIL` when your
+   site contact address is ready. `OPENAI_API_KEY` is optional; built-in search works
+   without it. Keep `TRUST_PROXY_HOPS=0` unless a trusted proxy chain is verified.
 3. Add your domain under Settings > Custom Domains and point DNS at it.
 
 The host doesn't need the 800MB `photos/` folder: missing local photos redirect to
@@ -117,11 +119,11 @@ their CDN copies.
 
 ## Config (in `index.html`)
 
-- `CONTACT.inbox` — your contact email. Shown on the Privacy and Terms pages, receives
-  Advertise requests, and switches on the "For property managers" page (hidden while blank).
-  **Set this before launch.**
-- Messaging: `data/contacts.json` holds verified leasing emails; set `RESEND_API_KEY` and
-  `MAIL_FROM` on the server to send directly (see "Messaging properties" in scraper/README.md).
+- `SUPPORT_EMAIL` (server environment) populates `CONTACT.inbox` through the public
+  `/site-config.js` response. Shown on Privacy and Terms, used for Advertise requests,
+  and enables the "For property managers" page. No address is invented when blank.
+- Messaging: `data/contacts.json` maps published leasing emails. Every property inquiry
+  opens Gmail; no server mail endpoint is active. Text, Call and property links are alternatives.
 - `BACKEND` — Supabase URL + anon key: VT Google sign-in and shared "I'm interested"
   lists. Setup and database rules: [backend/README.md](backend/README.md).
 - `SPONSOR_OFFER` — homepage sponsorship slots, terms and (optional) price shown on the
@@ -153,37 +155,27 @@ scraper/          the pipeline (Python)
 photos/           local photos (generated, git-ignored)
 ```
 
-## Release status (October 5, 2026)
+## Release status (November 3, 2026)
 
-The current app is a prototype with a real saved catalog (533 listings, refreshed
-September 21 at 8:05 PM Eastern). Sign-in, user posts, roommate matching, billing,
-admin metrics, and moderation are simulated or local-only. It is not ready to
-release as a functioning social marketplace.
+The search beta includes public browsing, same-plan budget filters, maps, property
+profiles, floor plans, photos, local saved places and Gmail draft history. Accounts,
+shared interests, demo subscriptions and demo social pages are not exposed in this
+release. The floating assistant launcher is removed; natural-language search remains.
 
-Recommended first release: a public housing-search beta with real listings,
-filters, maps, saved places on the current device, floor plans, and contact links.
-Before publishing: remove the simulated account gate and demo commerce/social
-flows; remove the remaining demo social flows;
-resolve rent-unit inference; refresh and verify student restriction evidence;
-verify the deployed site without local photos; and test mobile/keyboard flows.
-Shared features require real authentication and owner-scoped database policies.
-
-Request info sends the message to the property (replies go to the student) when mail is
-configured, else opens a Gmail draft to the same verified address; owners without an email
-get Text/Call. Contact history marks which were sent and which were drafts.
+`POST /api/message` returns 410 and cannot send email. The old standalone mail module
+is retained for reference and isolated tests, but the server does not import it.
+Support email, final domain selection and content rights remain owner decisions.
+Run `npm test` before deploying. Browser QA and the deployed catalog must also be checked.
 
 ## Photo layout preference
 
 Listing detail pages use the supplied Airbnb-style reference: one large image on
 the left and a 2×2 grid on the right, narrow white gaps,
 rounded outer corners, title above, and a Show all photos button at bottom right.
-The top-right grid slot has equal side-by-side actions: **Show more photos** and
-**View more on Google**, each with a single-line label. Smaller widths use
-**More photos** / **Google images** so text stays readable. No subtitle or large
-icons. Google opens Google Images in a new tab using property name and address.
-The other three small slots display listing photos.
-On mobile, show one large lead photo, the same full-gallery entry point, and
-a separate View more on Google link below the image.
+Gallery actions are compact buttons over the gallery: Show all photos opens the
+lightbox and Google Images opens an external search. No image tile is replaced
+by a large empty action panel. On mobile the gallery displays the lead image with
+compact actions below.
 Keep gallery/lightbox navigation by arrows, keyboard, and swipe. Accommodate
 listings with fewer than five images without duplicating pictures. Bedroom-count
 and floor-plan selection still determine the photo set.
@@ -211,8 +203,12 @@ property profile. Campaigns expire automatically, and pausing removes a placemen
 Sponsored placements do not change organic search results or near-campus picks.
 The old demo featured flags do not label unpaid listings as ads.
 
-Use `npm start`. Campaigns are read from `sponsorships/campaigns.json` on the server
-and managed with the local operator command. That file and the metrics are not
+Use `npm start`. Locally, campaigns are managed in `sponsorships/campaigns.json`.
+When `DATA_DIR` is set, both the server and operator CLI use that directory:
+`sponsor-campaigns.json` and `sponsor-stats.json`. The campaigns file is seeded
+from the repository once, without overwriting existing campaigns on redeploy.
+Run the operator command on the host (with the same `DATA_DIR`) to manage live
+campaigns; later edits to the seed file do not replace the persistent file. That file and the metrics are not
 served to visitors; there is no public campaign-write or pretend-payment endpoint.
 
 ```bash
@@ -234,8 +230,58 @@ and the advertiser's permission before activating a paid placement.
 
 Views are counted after a card is at least half visible for one second, once per
 page session. Clicks count property-profile opens. Aggregate daily counts are kept
-for 90 days in git-ignored `.local/sponsor-stats.json`, without raw visitor logs.
+for 90 days in `DATA_DIR/sponsor-stats.json` (or git-ignored
+`.local/sponsor-stats.json` locally), without raw visitor logs.
 These basic counts are not unique visitors, a guarantee of leads, or audited ad
 billing. The endpoint has a per-process abuse limit. A deployed version needs
-persistent storage for campaign config and metrics; billing and an authenticated
+a writable `DATA_DIR` for persistent campaign config and metrics (provided by
+the Render disk). Without a disk, runtime edits and counters can be lost on
+redeploy/restart. Billing and an authenticated
 manager portal are subsequent work, not simulated here.
+
+## Regression fixes (October 27, 2026)
+
+Malformed message bodies return 400 and unexpected route failures return a generic
+500 without terminating the server. Direct mail verifies a confirmed Google VT
+identity with Supabase on the server; the form email must match that identity.
+The client includes its session token; missing/invalid verification falls back to
+Gmail without sending through the site's mail account. IP limiting ignores
+untrusted forwarded headers by default, and sender quotas use the verified user ID.
+
+Manual per-person rent caps and whole-unit text budgets are applied to the same
+floor plan. Cards and map pins use that final plan set. Contact history stores
+transport and outcome separately, distinguishes submitted email from opened drafts,
+and migrates the previous duplicate Text entries. Provider acceptance does not
+claim inbox delivery, and a student copy is claimed only when its send succeeded.
+
+`npm test` includes real HTTP crash-regression checks, simulated identity/mail
+failures, spoofed-IP checks, real-catalog budget matching, client contact actions
+and operator CLI tests against a temporary persistent directory. Tests never send
+real property messages. Live Supabase/OAuth, mailbox delivery and deployment still
+require their actual configured services.
+
+### Contact flow decision (October 30, 2026)
+
+Property inquiries always open a prefilled Gmail compose window. Students review and press Send in Gmail. The site does not request Gmail permissions, read inboxes, or send property inquiries through its server. No Resend or Supabase setup is needed for contacting properties. Contact history tracks draft openings, not delivery. The legacy server mail route is disabled; it returns 410 even if old mail credentials exist.
+
+### Independent branding (October 30, 2026)
+
+The visible product name is now Blacksburg Housing, with an original house icon in place of the mascot. University references remain only where descriptive or explanatory (location, student eligibility, account requirements, and non-affiliation). Existing saved-data keys and internal component names are preserved to avoid losing browser data. Listing photos are unchanged. This branding change is not a trademark clearance or a license for listing content.
+
+## Preview hosting
+
+The first hosted check uses a free Node web service with no disk. It can sleep
+when idle, and aggregate sponsorship counts reset across restarts/redeploys.
+Browser-local saved places and contact history are unaffected. The existing
+`render.yaml` describes the optional persistent-disk setup for paid sponsorship
+operations; no paid campaigns should depend on free-service counters.
+
+Build/check command: `npm test && npm run check:catalog`. Start: `npm start`.
+Set `HOST=0.0.0.0`, `NODE_VERSION=22`, `NODE_ENV=production`; the platform assigns `PORT`.
+HTTP health endpoint: `/healthz`. Public support address: `SUPPORT_EMAIL` when ready.
+No scraper or periodic job runs on the web service. Catalog refresh stays on demand.
+
+The photo pipeline keeps the original signed source URLs as fallbacks when
+enlarged versions fail. Selected floor-plan images take priority over generic
+bedroom drawings. Basic asset checks are not a guarantee of future third-party
+CDN availability.

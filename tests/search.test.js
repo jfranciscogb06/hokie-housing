@@ -145,6 +145,26 @@ test("assistant answers questions about a named place instead of searching", () 
     const r = vm.runInContext("answerAI('is hub pet friendly?')", ctx);
     assert.match(r.text, /^Hub Blacksburg: /);
     assert.equal(r.picks.length, 1);
+    assert(r.picks[0].plans.length >= 3, 'general community questions must not use an individual room listing');
     // Plain searches still search.
     assert(vm.runInContext("answerAI('pet friendly under 1500').picks.length", ctx) > 0);
+});
+
+
+test("manual per-person caps and whole-unit budgets must match the same plan", () => {
+    const spec = Search.local("4 bedrooms entire apartment under $4000").spec;
+    const uptown = listings.find(l => l.name === "Uptown Village");
+    assert(uptown && uptown.price < 800);
+    const limited = Search.compile(spec, { maxPerPerson: 800 });
+    assert.equal(limited.hasPlanCriteria, true);
+    assert.equal(limited.filter(uptown), false);
+    assert.deepEqual(limited.matchingPlans(uptown), []);
+    const allowed = Search.compile(spec, { maxPerPerson: 1000 });
+    assert.equal(allowed.filter(uptown), true);
+    assert(allowed.matchingPlans(uptown).every(p => p.price <= 1000 && Search.local("entire apartment under $4000").filter({ plans: [p] })));
+    const listing = { price: 500, plans: [{ beds: 1, price: 500, basis: "bed" }, { beds: 4, price: 950, basis: "bed" }] };
+    assert.equal(limited.filter(listing), false);
+    assert.equal(Search.compile(Search.empty(), { maxPerPerson: 600 }).hasPlanCriteria, true);
+    assert.equal(Search.compile(Search.empty(), { maxPerPerson: 600 }).filter({ price: 0 }), false);
+    assert.throws(() => Search.compile(spec, { maxPerPerson: -1 }));
 });

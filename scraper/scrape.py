@@ -152,6 +152,22 @@ def learn_amenities(detail: dict, amenities: dict[str, str]):
 
 
 # ---------------------------------------------------------------- photos
+def original_photo_fallbacks(srcs: list[str], groups: dict[str, list[str]], record: dict) -> dict[str, str]:
+    used = set(record.get("photos") or [])
+    used.update((record.get("planPhotos") or {}).values())
+    used.update(p.get("image") for p in record.get("plans") or [] if p.get("image"))
+    for group in (record.get("photosByBeds") or {}).values():
+        used.update(group)
+    out = {}
+    for original in list(srcs) + [x for group in groups.values() for x in group]:
+        original = "https:" + original if original.startswith("//") else original
+        original = original.replace("{options}", "116")
+        large = full_size_url(original)
+        if large in used and large != original:
+            out[large] = original
+    return out
+
+
 def photo_sources(placard: dict, detail: dict | None) -> list[str]:
     """Ordered photo URLs; first one is what the site shows as the main photo."""
     srcs = []
@@ -729,7 +745,9 @@ def main():
                     rec = to_app(sid, p, d, amenities, [full_size_url(x) for x in srcs[:args.photos or 8]],
                                  {tag: [full_size_url(x) for x in g[:4 if tag.startswith("beds") else 1]] for tag, g in groups.items()})
                     rec["photosRemote"] = list(rec["photos"])
-                    rec["photoFallbacks"] = {}
+                    # Enlarging some portal images fails even though the signed
+                    # original still exists. Keep that original as a browser fallback.
+                    rec["photoFallbacks"] = original_photo_fallbacks(srcs, groups, rec)
                     listings.append(rec)
                     continue
                 if photos_on:

@@ -116,29 +116,15 @@ No LLM is called; to swap in a model, generate them in `build_overview()` and ca
 
 ## Messaging properties (Request info / Request a tour)
 
-Students message a property from its page. Three paths, chosen automatically:
+Students contact a property from its page. A published leasing email opens a prefilled
+Gmail draft; students review and press Send themselves. Properties without an email
+offer Text, Call and property/source links. No Gmail access or mail service is required.
+Contact history records draft openings and contact actions, not delivery.
 
-1. **Sent directly** (when `RESEND_API_KEY` and `MAIL_FROM` are set on the server):
-   `POST /api/message` emails the property from Hokie Housing with **Reply-To set to the
-   student**, so the property's reply goes straight to the student's VT inbox. The student
-   gets a copy. Requires an @vt.edu address; rate-limited per student, per IP and per day;
-   has a honeypot for bots. The recipient is looked up on the server, never sent by the
-   browser, so the endpoint can't be used to email arbitrary addresses.
-2. **Gmail draft** (no mail settings, or the mail service fails): the same message opens in
-   Gmail addressed to the same verified recipient; the student hits send.
-3. **Text / Call** (property has no published email): Text opens the phone's messages app
-   with the message prefilled.
-
-Recipients come from `data/contacts.json`: public leasing emails from each management
-company's or property's own website, keyed by the manager name on the portal. It covers
-242 of 435 listings (Townside, River Mountain, Price, Roost, Core Spaces/Hub, Brexx,
-Pointe West/Granite, Roanoke Street, Dogwood/Turner NW). The rest are mostly individual
-owners who only list a phone. To add one: find the address on their site, add
-`"Manager name": { "email": ..., "source": ... }`. Remove any that bounce or object.
-
-**Turning on direct sending:** create a Resend account (free tier: 3,000 emails/month),
-verify your domain's DNS records there, then set on the host:
-`RESEND_API_KEY=re_...` and `MAIL_FROM=Hokie Housing <messages@your-domain>`.
+Recipients come from `data/contacts.json`, keyed by manager name, or a listing's
+published email. These are source-mapped addresses, not a guarantee of delivery.
+Add a source URL when updating the directory and remove addresses that bounce or object.
+The legacy `/api/message` route is disabled.
 
 ## Shared interested-student lists
 
